@@ -7,6 +7,10 @@ WORKDIR /workspace
 COPY pom.xml /workspace/
 COPY core /workspace/core
 COPY central-server /workspace/central-server
+# The root pom's <modules> also lists `agent` - Maven needs every listed module's pom.xml
+# present just to parse the reactor topology, even with -pl restricting what actually gets
+# built. Copying only its pom.xml (not the source) keeps the build context lean.
+COPY agent/pom.xml /workspace/agent/pom.xml
 # Use the image's own `mvn`, not the project's ./mvnw wrapper: this base image already
 # ships a pinned Maven, so the wrapper's own download-and-verify step is one less moving
 # part to fail inside the build. No -q either, so a real failure shows the actual error
