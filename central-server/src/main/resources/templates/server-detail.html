@@ -80,7 +80,9 @@
 				</thead>
 				<tbody>
 					<tr th:each="service : ${services}" th:with="metric=${latestServiceMetrics.get(service.id)}">
-						<td class="mono" th:text="${service.id}">name</td>
+						<td class="mono">
+							<a th:href="@{/servers/{sid}/services/{id}(sid=${server.id},id=${service.id})}" th:text="${service.id}">name</a>
+						</td>
 						<td th:text="${service.type}">type</td>
 						<td>
 							<span th:class="'badge badge-' + ${service.status.name().toLowerCase()}" th:text="${service.status}">status</span>

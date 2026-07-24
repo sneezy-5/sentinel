@@ -13,6 +13,7 @@
 		<a class="brand" th:href="@{/}"><span class="dot"></span> Sentinel</a>
 		<nav>
 			<a th:href="@{/}">Servers</a>
+			<a th:href="@{/alerts}">Alerts</a>
 			<a th:href="@{/settings}">Settings</a>
 			<form th:action="@{/logout}" method="post" class="logout-form">
 				<input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>

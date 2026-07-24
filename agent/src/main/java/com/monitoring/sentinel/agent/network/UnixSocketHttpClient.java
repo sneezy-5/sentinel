@@ -8,6 +8,8 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Locale;
 
 /**
  * Minimal HTTP/1.1-over-unix-socket GET client - just enough to talk to the Docker Engine
@@ -28,6 +30,22 @@ public final class UnixSocketHttpClient {
 			String request = "GET " + path + " HTTP/1.1\r\nHost: docker\r\nConnection: close\r\n\r\n";
 			channel.write(ByteBuffer.wrap(request.getBytes(StandardCharsets.US_ASCII)));
 			return parseBody(readAll(channel));
+		}
+	}
+
+	/**
+	 * Same as {@link #get}, but keeps the response body as raw bytes instead of decoding it
+	 * to a String - needed for endpoints whose body isn't text (Docker's container logs
+	 * endpoint returns a binary multiplexed stream, not JSON/plain text; round-tripping that
+	 * through a UTF-8 String would corrupt the frame header bytes).
+	 */
+	public static byte[] getBytes(Path socketPath, String path) throws IOException {
+		UnixDomainSocketAddress address = UnixDomainSocketAddress.of(socketPath);
+		try (SocketChannel channel = SocketChannel.open(StandardProtocolFamily.UNIX)) {
+			channel.connect(address);
+			String request = "GET " + path + " HTTP/1.1\r\nHost: docker\r\nConnection: close\r\n\r\n";
+			channel.write(ByteBuffer.wrap(request.getBytes(StandardCharsets.US_ASCII)));
+			return parseBodyBytes(readAll(channel));
 		}
 	}
 
@@ -88,5 +106,64 @@ public final class UnixSocketHttpClient {
 			pos = chunkEnd + 2;
 		}
 		return result.toString();
+	}
+
+	private static byte[] parseBodyBytes(byte[] raw) {
+		int headerEnd = indexOfCrlfCrlf(raw, 0);
+		if (headerEnd < 0) {
+			return raw;
+		}
+		String headers = new String(raw, 0, headerEnd, StandardCharsets.US_ASCII);
+		byte[] body = Arrays.copyOfRange(raw, headerEnd + 4, raw.length);
+		if (headers.toLowerCase(Locale.ROOT).contains("transfer-encoding: chunked")) {
+			return dechunkBytes(body);
+		}
+		return body;
+	}
+
+	/** Package-private for direct unit testing. Same chunk framing as {@link #dechunk}, but
+	 * chunk payloads are copied as raw bytes - only the ASCII size-line is treated as text. */
+	static byte[] dechunkBytes(byte[] chunkedBody) {
+		ByteArrayOutputStream result = new ByteArrayOutputStream();
+		int pos = 0;
+		while (pos < chunkedBody.length) {
+			int lineEnd = indexOfCrlf(chunkedBody, pos);
+			if (lineEnd < 0) {
+				break;
+			}
+			String sizeLine = new String(chunkedBody, pos, lineEnd - pos, StandardCharsets.US_ASCII).trim();
+			int chunkSize;
+			try {
+				chunkSize = Integer.parseInt(sizeLine, 16);
+			} catch (NumberFormatException e) {
+				break;
+			}
+			if (chunkSize == 0) {
+				break;
+			}
+			int chunkStart = lineEnd + 2;
+			int chunkEnd = Math.min(chunkStart + chunkSize, chunkedBody.length);
+			result.write(chunkedBody, chunkStart, chunkEnd - chunkStart);
+			pos = chunkEnd + 2;
+		}
+		return result.toByteArray();
+	}
+
+	private static int indexOfCrlf(byte[] data, int from) {
+		for (int i = from; i <= data.length - 2; i++) {
+			if (data[i] == '\r' && data[i + 1] == '\n') {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private static int indexOfCrlfCrlf(byte[] data, int from) {
+		for (int i = from; i <= data.length - 4; i++) {
+			if (data[i] == '\r' && data[i + 1] == '\n' && data[i + 2] == '\r' && data[i + 3] == '\n') {
+				return i;
+			}
+		}
+		return -1;
 	}
 }

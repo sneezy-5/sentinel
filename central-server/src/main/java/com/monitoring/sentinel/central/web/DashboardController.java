@@ -2,9 +2,11 @@ package com.monitoring.sentinel.central.web;
 
 import com.monitoring.sentinel.central.persistence.entity.ServiceEntity;
 import com.monitoring.sentinel.central.persistence.entity.ServiceMetricEntity;
+import com.monitoring.sentinel.central.persistence.repository.LogEntryRepository;
 import com.monitoring.sentinel.central.persistence.repository.ServerRepository;
 import com.monitoring.sentinel.central.persistence.repository.ServiceMetricRepository;
 import com.monitoring.sentinel.central.persistence.repository.ServiceRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,14 +27,17 @@ public class DashboardController {
 	private final ServerRepository serverRepository;
 	private final ServiceRepository serviceRepository;
 	private final ServiceMetricRepository serviceMetricRepository;
+	private final LogEntryRepository logEntryRepository;
 
 	public DashboardController(
 			ServerRepository serverRepository,
 			ServiceRepository serviceRepository,
-			ServiceMetricRepository serviceMetricRepository) {
+			ServiceMetricRepository serviceMetricRepository,
+			LogEntryRepository logEntryRepository) {
 		this.serverRepository = serverRepository;
 		this.serviceRepository = serviceRepository;
 		this.serviceMetricRepository = serviceMetricRepository;
+		this.logEntryRepository = logEntryRepository;
 	}
 
 	@GetMapping("/")
@@ -58,5 +63,17 @@ public class DashboardController {
 		model.addAttribute("services", services);
 		model.addAttribute("latestServiceMetrics", latestServiceMetrics);
 		return "server-detail";
+	}
+
+	@GetMapping("/servers/{serverId}/services/{serviceId}")
+	public String serviceDetail(
+			@PathVariable String serverId, @PathVariable String serviceId, Model model) {
+		model.addAttribute("server", serverRepository.findById(serverId).orElseThrow());
+		model.addAttribute("service", serviceRepository.findById(serviceId).orElseThrow());
+		model.addAttribute("metric",
+				serviceMetricRepository.findFirstByServiceIdOrderByTimestampDesc(serviceId).orElse(null));
+		model.addAttribute("logs",
+				logEntryRepository.findByServiceIdOrderByTimestampDesc(serviceId, PageRequest.of(0, 100)));
+		return "service-detail";
 	}
 }

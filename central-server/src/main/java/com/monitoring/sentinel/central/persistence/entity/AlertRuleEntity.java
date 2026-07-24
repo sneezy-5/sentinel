@@ -25,9 +25,6 @@ public class AlertRuleEntity {
 
 	private boolean enabled;
 
-	protected AlertRuleEntity() {
-	}
-
 	public AlertRule toModel() {
 		AlertRule rule = new AlertRule();
 		rule.setId(id);
@@ -40,27 +37,59 @@ public class AlertRuleEntity {
 		return rule;
 	}
 
+	public String getId() {
+		return id;
+	}
+
+	public void setId(String id) {
+		this.id = id;
+	}
+
 	public String getServerId() {
 		return serverId;
+	}
+
+	public void setServerId(String serverId) {
+		this.serverId = serverId;
 	}
 
 	public String getServiceId() {
 		return serviceId;
 	}
 
+	public void setServiceId(String serviceId) {
+		this.serviceId = serviceId;
+	}
+
 	public String getTargetMetric() {
 		return targetMetric;
+	}
+
+	public void setTargetMetric(String targetMetric) {
+		this.targetMetric = targetMetric;
 	}
 
 	public double getThreshold() {
 		return threshold;
 	}
 
+	public void setThreshold(double threshold) {
+		this.threshold = threshold;
+	}
+
 	public AlertLevel getLevel() {
 		return level;
 	}
 
+	public void setLevel(AlertLevel level) {
+		this.level = level;
+	}
+
 	public boolean isEnabled() {
 		return enabled;
+	}
+
+	public void setEnabled(boolean enabled) {
+		this.enabled = enabled;
 	}
 }

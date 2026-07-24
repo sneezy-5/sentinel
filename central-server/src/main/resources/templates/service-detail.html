@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(title=${service.id})}"></head>
+<body>
+	<div th:replace="~{fragments/layout :: topbar}"></div>
+
+	<main>
+		<a class="back-link" th:href="@{/servers/{id}(id=${server.id})}">&larr; <span th:text="${server.name}">server</span></a>
+
+		<div class="page-header">
+			<h1 class="mono" th:text="${service.id}">service id</h1>
+			<span th:class="'badge badge-' + ${service.status.name().toLowerCase()}" th:text="${service.status}">status</span>
+		</div>
+		<p class="subtitle" th:text="${service.type}">type</p>
+
+		<div class="card">
+			<div class="card-header">Metrics</div>
+			<dl class="info-grid">
+				<div>
+					<dt>CPU</dt>
+					<dd th:text="${metric != null} ? ${#numbers.formatDecimal(metric.cpuPercent, 1, 1, 'POINT')} + '%' : '—'">-</dd>
+				</div>
+				<div>
+					<dt>Memory</dt>
+					<dd th:text="${metric != null} ? ${metric.memMb} + ' MB' : '—'">-</dd>
+				</div>
+				<div>
+					<dt>Disk</dt>
+					<dd th:text="${metric != null} ? ${metric.diskMb} + ' MB' : '—'">-</dd>
+				</div>
+			</dl>
+		</div>
+
+		<div class="card">
+			<div class="card-header">Recent logs</div>
+			<table th:if="${not #lists.isEmpty(logs)}">
+				<thead>
+					<tr>
+						<th>Time</th>
+						<th>Level</th>
+						<th>Message</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr th:each="log : ${logs}">
+						<td class="mono" th:text="${log.timestamp}">-</td>
+						<td>
+							<span th:class="'badge badge-' + ${log.level.name().toLowerCase()}" th:text="${log.level}">level</span>
+						</td>
+						<td class="mono log-message" th:text="${log.message}">message</td>
+					</tr>
+				</tbody>
+			</table>
+			<div class="empty-state" th:if="${#lists.isEmpty(logs)}">
+				No logs collected for this service yet.
+			</div>
+		</div>
+	</main>
+</body>
+</html>

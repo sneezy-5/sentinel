@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(title='Alert rules')}"></head>
+<body>
+	<div th:replace="~{fragments/layout :: topbar}"></div>
+
+	<main>
+		<div class="page-header">
+			<h1>Alert rules</h1>
+		</div>
+
+		<div class="card">
+			<div class="card-header">Add a rule</div>
+			<p class="settings-note">
+				Evaluated every 30s against the latest ingested metric (architecture doc, section
+				4.1). Leave "Service id" blank for a server-level rule (e.g. system CPU); fill it in
+				(exact id, e.g. <span class="mono">docker:registry-1</span>) for a per-service rule.
+				Metric name must match what's actually collected: <span class="mono">cpuPercent</span>
+				or <span class="mono">ramUsedMb</span> for a server, <span class="mono">cpuPercent</span>,
+				<span class="mono">memMb</span>, or <span class="mono">diskMb</span> for a service.
+			</p>
+			<form th:action="@{/alerts}" method="post" class="settings-form">
+				<input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+				<label for="serverId">Server</label>
+				<select id="serverId" name="serverId" required>
+					<option th:each="server : ${servers}" th:value="${server.id}" th:text="${server.name}">server</option>
+				</select>
+				<label for="serviceId">Service id (optional)</label>
+				<input type="text" id="serviceId" name="serviceId" placeholder="e.g. docker:registry-1" autocomplete="off"/>
+				<label for="targetMetric">Metric</label>
+				<input type="text" id="targetMetric" name="targetMetric" placeholder="cpuPercent" required autocomplete="off"/>
+				<label for="threshold">Threshold</label>
+				<input type="number" id="threshold" name="threshold" step="any" required/>
+				<label for="level">Level</label>
+				<select id="level" name="level" required>
+					<option th:each="lvl : ${levels}" th:value="${lvl}" th:text="${lvl}">level</option>
+				</select>
+				<button type="submit" class="btn">Add rule</button>
+			</form>
+		</div>
+
+		<div class="card">
+			<div class="card-header">Rules</div>
+			<table th:if="${not #lists.isEmpty(rules)}">
+				<thead>
+					<tr>
+						<th>Server</th>
+						<th>Service</th>
+						<th>Metric</th>
+						<th>Threshold</th>
+						<th>Level</th>
+						<th>Enabled</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr th:each="rule : ${rules}">
+						<td class="mono" th:text="${rule.serverId}">server</td>
+						<td class="mono" th:text="${rule.serviceId} ?: '—'">-</td>
+						<td class="mono" th:text="${rule.targetMetric}">metric</td>
+						<td class="mono" th:text="${rule.threshold}">threshold</td>
+						<td>
+							<span th:class="'badge badge-' + ${rule.level.name().toLowerCase()}" th:text="${rule.level}">level</span>
+						</td>
+						<td th:text="${rule.enabled} ? 'Yes' : 'No'">enabled</td>
+						<td>
+							<form th:action="@{/alerts/{id}/delete(id=${rule.id})}" method="post" class="logout-form">
+								<input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+								<button type="submit" class="link-button">Delete</button>
+							</form>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+			<div class="empty-state" th:if="${#lists.isEmpty(rules)}">
+				No alert rules yet.
+			</div>
+		</div>
+	</main>
+</body>
+</html>
