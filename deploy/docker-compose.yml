@@ -39,6 +39,11 @@ services:
       # ddl-auto stays "update" here too: the hypertable conversion above only runs once,
       # against tables Hibernate itself creates on first boot - see init-hypertables.sql.
       SENTINEL_PUBLIC_URL: https://${SENTINEL_DOMAIN:?set SENTINEL_DOMAIN in deploy/.env}
+    ports:
+      # Bound to loopback only, not the public interface: real traffic must go through
+      # Caddy (TLS). This just lets you reach it via an SSH tunnel for debugging, or
+      # locally if you're running the stack on your own machine.
+      - "127.0.0.1:8080:8080"
     volumes:
       # Agent binaries + install.sh (see WebConfig, serves /downloads/** and /install.sh
       # from here). Populate this directory yourself - see the "Deploying to production"

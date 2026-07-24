@@ -40,7 +40,9 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build the agent's native binary
-        run: ./mvnw -pl agent -am -Pnative -DskipTests package
+        run: |
+          chmod +x mvnw
+          ./mvnw -pl agent -am -Pnative -DskipTests package
 
       - name: Publish the artifact
         uses: actions/upload-artifact@v4

@@ -4,11 +4,14 @@
 
 FROM maven:3.9-eclipse-temurin-17 AS build
 WORKDIR /workspace
-COPY pom.xml mvnw mvnw.cmd /workspace/
-COPY .mvn /workspace/.mvn
+COPY pom.xml /workspace/
 COPY core /workspace/core
 COPY central-server /workspace/central-server
-RUN chmod +x mvnw && ./mvnw -q -pl central-server -am -DskipTests package
+# Use the image's own `mvn`, not the project's ./mvnw wrapper: this base image already
+# ships a pinned Maven, so the wrapper's own download-and-verify step is one less moving
+# part to fail inside the build. No -q either, so a real failure shows the actual error
+# instead of just "exit code: 1".
+RUN mvn -pl central-server -am -DskipTests package
 
 FROM eclipse-temurin:17-jre-jammy
 RUN useradd --system --create-home --shell /usr/sbin/nologin sentinel
