@@ -2,6 +2,7 @@ package com.monitoring.sentinel.central.persistence.entity;
 
 import com.monitoring.sentinel.core.enums.LogLevel;
 import com.monitoring.sentinel.core.model.LogEntry;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -27,6 +28,10 @@ public class LogEntryEntity {
 	@Enumerated(EnumType.STRING)
 	private LogLevel level;
 
+	// Docker log lines (stack traces especially) routinely exceed the default varchar(255) -
+	// a real container send this hit "value too long for type character varying(255)" on
+	// its first day in prod.
+	@Column(columnDefinition = "text")
 	private String message;
 
 	protected LogEntryEntity() {
