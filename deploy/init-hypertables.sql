@@ -17,10 +17,15 @@
 -- If a DROP CONSTRAINT below fails with "constraint does not exist", inspect the real
 -- name with `\d system_metrics` (etc.) - Postgres' default naming (<table>_pkey) is
 -- assumed here but wasn't verified against a live database in this environment.
+--
+-- system_metrics needs CASCADE: system_metric_disks (the @ElementCollection table for
+-- SystemMetricEntity.disks) has a foreign key pointing at this primary key, so a plain
+-- DROP CONSTRAINT fails. CASCADE also drops that FK - harmless, Hibernate manages the
+-- disks/parent relationship at the ORM level, not through the DB constraint.
 
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
-ALTER TABLE system_metrics DROP CONSTRAINT IF EXISTS system_metrics_pkey;
+ALTER TABLE system_metrics DROP CONSTRAINT IF EXISTS system_metrics_pkey CASCADE;
 SELECT create_hypertable('system_metrics', by_range('timestamp'), if_not_exists => TRUE, migrate_data => TRUE);
 
 ALTER TABLE service_metrics DROP CONSTRAINT IF EXISTS service_metrics_pkey;
