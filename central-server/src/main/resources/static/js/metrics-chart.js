@@ -204,12 +204,7 @@
 		hitArea.addEventListener("pointerleave", hide);
 	}
 
-	async function init() {
-		const detail = document.getElementById("server-metrics");
-		if (!detail) {
-			return;
-		}
-		const serverId = detail.dataset.serverId;
+	async function refreshMetrics(detail, serverId) {
 		let metrics;
 		try {
 			const response = await fetch("/api/metrics/servers/" + encodeURIComponent(serverId) + "?limit=120");
@@ -229,8 +224,53 @@
 			return;
 		}
 
+		detail.querySelector(".chart-empty").hidden = true;
 		renderStatTiles(detail, metrics);
 		renderChart(detail, metrics);
+	}
+
+	// Status/last-push/services count are server-rendered on load - re-fetched from the
+	// same list endpoint the dashboard itself uses (GET /api/servers) rather than adding a
+	// single-server endpoint just for this.
+	async function refreshOverview(serverId) {
+		try {
+			const response = await fetch("/api/servers");
+			if (!response.ok) {
+				throw new Error("HTTP " + response.status);
+			}
+			const servers = await response.json();
+			const server = servers.find((s) => s.id === serverId);
+			if (!server) {
+				return;
+			}
+			const statusLower = server.status.toLowerCase();
+			document.querySelectorAll('[data-field="status-badge"]').forEach((el) => {
+				el.textContent = server.status;
+				el.className = "badge badge-" + statusLower;
+			});
+			document.querySelectorAll('[data-field="status-text"]').forEach((el) => {
+				el.textContent = server.status;
+			});
+			document.querySelectorAll('[data-field="last-push"]').forEach((el) => {
+				el.textContent = server.lastPushAt || "—";
+			});
+		} catch (err) {
+			// Transient fetch failure - leave the last known values on screen.
+		}
+	}
+
+	function init() {
+		const detail = document.getElementById("server-metrics");
+		if (!detail) {
+			return;
+		}
+		const serverId = detail.dataset.serverId;
+		const refresh = () => {
+			refreshMetrics(detail, serverId);
+			refreshOverview(serverId);
+		};
+		refresh();
+		setInterval(refresh, 30000);
 	}
 
 	document.addEventListener("DOMContentLoaded", init);

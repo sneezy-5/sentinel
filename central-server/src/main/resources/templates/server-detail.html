@@ -9,7 +9,7 @@
 
 		<div class="page-header">
 			<h1 th:text="${server.name}">name</h1>
-			<span th:class="'badge badge-' + ${server.status.name().toLowerCase()}" th:text="${server.status}">status</span>
+			<span th:class="'badge badge-' + ${server.status.name().toLowerCase()}" th:text="${server.status}" data-field="status-badge">status</span>
 		</div>
 		<p class="subtitle mono" th:text="${server.hostname}">hostname</p>
 
@@ -18,11 +18,11 @@
 			<dl class="info-grid">
 				<div>
 					<dt>Status</dt>
-					<dd th:text="${server.status}">-</dd>
+					<dd th:text="${server.status}" data-field="status-text">-</dd>
 				</div>
 				<div>
 					<dt>Last push</dt>
-					<dd th:text="${server.lastPushAt} ?: '—'">-</dd>
+					<dd th:text="${server.lastPushAt} ?: '—'" data-field="last-push">-</dd>
 				</div>
 				<div>
 					<dt>Services</dt>
