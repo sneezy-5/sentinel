@@ -5,6 +5,8 @@ import java.io.IOException;
 import java.net.StandardProtocolFamily;
 import java.net.UnixDomainSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -19,6 +21,13 @@ import java.util.Locale;
  * architecture doc, section 3.1).
  */
 public final class UnixSocketHttpClient {
+
+	// A hung/overloaded Docker daemon that accepts the connection but never sends a byte
+	// back would otherwise block readAll() forever - discovered live when a monitored
+	// server's Docker daemon stalled and silently wedged the whole agent loop before it
+	// ever got to pushing metrics (no adapter-level try/catch helps if the call itself
+	// never returns).
+	private static final int READ_TIMEOUT_MS = 5000;
 
 	private UnixSocketHttpClient() {
 	}
@@ -50,19 +59,34 @@ public final class UnixSocketHttpClient {
 	}
 
 	private static byte[] readAll(SocketChannel channel) throws IOException {
-		ByteBuffer buffer = ByteBuffer.allocate(8192);
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-		int read;
-		// The request asks for "Connection: close", so the daemon closes its end once the
-		// response is fully sent - read() returning -1 is the natural end, not a timeout.
-		while ((read = channel.read(buffer)) != -1) {
-			buffer.flip();
-			byte[] chunk = new byte[buffer.remaining()];
-			buffer.get(chunk);
-			out.write(chunk);
-			buffer.clear();
+		// SocketChannel has no SO_TIMEOUT equivalent for blocking reads - switch to
+		// non-blocking + a Selector so a daemon that never responds trips a timeout instead
+		// of hanging this call (and the whole agent loop behind it) forever.
+		channel.configureBlocking(false);
+		try (Selector selector = Selector.open()) {
+			channel.register(selector, SelectionKey.OP_READ);
+			ByteBuffer buffer = ByteBuffer.allocate(8192);
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			// The request asks for "Connection: close", so the daemon closes its end once the
+			// response is fully sent - read() returning -1 is the natural end, not a timeout.
+			while (true) {
+				if (selector.select(READ_TIMEOUT_MS) == 0) {
+					throw new IOException(
+							"Timed out after " + READ_TIMEOUT_MS + "ms waiting for a response (Docker daemon not responding?)");
+				}
+				selector.selectedKeys().clear();
+				int read = channel.read(buffer);
+				if (read == -1) {
+					break;
+				}
+				buffer.flip();
+				byte[] chunk = new byte[buffer.remaining()];
+				buffer.get(chunk);
+				out.write(chunk);
+				buffer.clear();
+			}
+			return out.toByteArray();
 		}
-		return out.toByteArray();
 	}
 
 	private static String parseBody(byte[] raw) {
