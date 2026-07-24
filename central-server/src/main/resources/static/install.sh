@@ -56,6 +56,13 @@ echo "==> Installing into ${INSTALL_DIR} (arch: ${ARCH})"
 mkdir -p "${INSTALL_DIR}/bin"
 mkdir -p /var/lib/sentinel /run/sentinel
 
+# Re-running this script to update an already-installed agent overwrites the binaries in
+# place - if the old process is still running that file, the write fails with ETXTBSY
+# ("text file busy"), which curl reports as exit 23. Stopping first avoids that; `|| true`
+# keeps a first-time install working when these units don't exist yet.
+echo "==> Stopping any existing services before overwriting binaries"
+systemctl stop monitoring-agent.service monitoring-agent-collector.service 2>/dev/null || true
+
 echo "==> Downloading binaries from ${DOWNLOAD_BASE}"
 curl -fsSL "${DOWNLOAD_BASE}/sentinel-agent-linux-${ARCH}" -o "${INSTALL_DIR}/bin/sentinel-agent"
 curl -fsSL "${DOWNLOAD_BASE}/sentinel-native-linux-${ARCH}" -o "${INSTALL_DIR}/bin/sentinel-native"
