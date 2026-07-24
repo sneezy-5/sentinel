@@ -1,0 +1,105 @@
+name: agent-release
+
+# Builds both agent binaries (the Java `agent` module's GraalVM native image, and the C
+# `agent-native` module) for amd64 and arm64, and publishes all four as assets on the
+# GitHub Release matching the pushed tag - install.sh fetches them from
+# https://github.com/<repo>/releases/latest/download/... with no auth needed.
+#
+# Previously this was two separate workflows, each with its own amd64/arm64 matrix (4 jobs
+# total), all racing to create/update the same release concurrently via
+# softprops/action-gh-release - which doesn't handle that reliably (errors on
+# "already_exists" mid-upload). Tried serializing with a shared `concurrency:` group next,
+# but GitHub's concurrency queue only keeps the MOST RECENT pending job per group and
+# cancels older ones waiting behind it - `cancel-in-progress: false` only protects a job
+# that's already RUNNING, not ones still queued. Two of the four jobs got silently
+# cancelled instead of running in turn.
+#
+# Fix: one workflow, four explicitly-named jobs chained with `needs:` so they run strictly
+# one after another - a real dependency chain instead of best-effort queue semantics.
+#
+# native-image and the C build both need to run ON a matching arch (no cross-compilation) -
+# ubuntu-24.04-arm is a native arm64 runner hosted by GitHub for public repos; if it's not
+# available on this account/plan, those two jobs need a buildx + QEMU build instead
+# (slower, treat as unvalidated until tested).
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  agent-amd64:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "17"
+          distribution: "graalvm"
+          native-image-musl: "true"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          chmod +x mvnw
+          ./mvnw -pl agent -am -Pnative -DskipTests package
+      - run: cp agent/target/sentinel-agent sentinel-agent-linux-amd64
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: sentinel-agent-linux-amd64
+          fail_on_unmatched_files: true
+
+  agent-arm64:
+    needs: agent-amd64
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "17"
+          distribution: "graalvm"
+          native-image-musl: "true"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - run: |
+          chmod +x mvnw
+          ./mvnw -pl agent -am -Pnative -DskipTests package
+      - run: cp agent/target/sentinel-agent sentinel-agent-linux-arm64
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: sentinel-agent-linux-arm64
+          fail_on_unmatched_files: true
+
+  native-amd64:
+    needs: agent-arm64
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cd agent-native
+          make
+      - run: cp agent-native/bin/sentinel-native sentinel-native-linux-amd64
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: sentinel-native-linux-amd64
+          fail_on_unmatched_files: true
+
+  native-arm64:
+    needs: native-amd64
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          cd agent-native
+          make
+      - run: cp agent-native/bin/sentinel-native sentinel-native-linux-arm64
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: sentinel-native-linux-arm64
+          fail_on_unmatched_files: true
