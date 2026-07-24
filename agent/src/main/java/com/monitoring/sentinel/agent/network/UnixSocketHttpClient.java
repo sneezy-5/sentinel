@@ -67,10 +67,18 @@ public final class UnixSocketHttpClient {
 			channel.register(selector, SelectionKey.OP_READ);
 			ByteBuffer buffer = ByteBuffer.allocate(8192);
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
-			// The request asks for "Connection: close", so the daemon closes its end once the
-			// response is fully sent - read() returning -1 is the natural end, not a timeout.
+			// The request asks for "Connection: close", and most endpoints (/containers/json,
+			// /stats) honor it - read() returning -1 is the natural end there. The container
+			// logs endpoint doesn't: Docker hijacks that connection to write the response and,
+			// observed live, never closes it afterwards even without follow=true - every byte
+			// still arrives, the socket just goes quiet instead of hitting EOF. So a quiet
+			// socket after some data has already arrived is treated as "done", not a failure;
+			// only a socket that's quiet from the very start (zero bytes) is a real timeout.
 			while (true) {
 				if (selector.select(READ_TIMEOUT_MS) == 0) {
+					if (out.size() > 0) {
+						break;
+					}
 					throw new IOException(
 							"Timed out after " + READ_TIMEOUT_MS + "ms waiting for a response (Docker daemon not responding?)");
 				}
