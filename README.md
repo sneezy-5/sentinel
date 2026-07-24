@@ -184,6 +184,40 @@ If a monitored server can't reach github.com, `deploy/downloads/` is a self-host
 Visit `https://<your-domain>`, add a server from the dashboard, and run the install
 command it gives you on a second VPS to exercise the full push flow end-to-end.
 
+### Resetting a deployment (wipe and start over)
+
+Since `ddl-auto` is `update`, not a real migration tool (see the "Getting started" note
+above), a schema change to an *existing* column (e.g. widening `logs_raw.message` from the
+Hibernate-default `varchar(255)` to `text` in the commit that fixed real container logs
+truncating) never gets applied automatically to a database that already has that column -
+`update` only adds what's missing, it doesn't alter what's already there. The reliable fix
+after a schema change like that is to drop the database and let it get recreated from
+scratch, rather than trying to hand-write an `ALTER TABLE`:
+
+```bash
+cd ~/sentinel   # wherever deploy/docker-compose.yml lives on this VPS
+
+# Wipes central-server + TimescaleDB and their volume (all servers/metrics/logs/alert
+# rules are lost - re-adding a server generates a new token).
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env down -v
+
+# Agent binaries + config live outside Docker entirely (see install.sh) - remove them too
+# so the reinstall below writes a fresh config with the new token instead of reusing the
+# old one (install.sh never overwrites an existing monitoring-agent.yml).
+systemctl stop monitoring-agent.service monitoring-agent-collector.service
+rm -rf /opt/monitoring-agent
+
+# Pull the latest images/binaries and come back up on a clean schema.
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env pull
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env logs -f central-server
+# wait for "Started CentralServerApplication", then Ctrl+C
+```
+
+Then re-run `init-hypertables.sql` (see above - the plain tables need converting again on
+the fresh schema), add a server from the dashboard to get a new install command, and run
+it on the monitored server to reinstall the agent with the new token.
+
 **The deploy stack (Docker Compose, Caddy, hypertable SQL) has not been run in this
 environment** (no Docker available here) — the three release workflows above have run
 successfully in CI, but the actual `docker compose up` on a real VPS is still unverified.
