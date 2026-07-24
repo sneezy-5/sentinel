@@ -119,8 +119,13 @@ cp deploy/.env.example deploy/.env
 # edit deploy/.env: SENTINEL_DOMAIN must have a DNS A record pointing at this VPS already,
 # Caddy requests the cert on first request and will fail if the domain doesn't resolve.
 
-docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 ```
+
+`central-server` is pulled pre-built from GHCR, not compiled on the VPS - no JDK/Maven
+needed there. If GHCR rejects the pull ("denied"/"unauthorized"), the package is probably
+still private (Actions-published packages default to private): switch its visibility to
+public in the package's GitHub settings.
 
 Then, once central-server has come up and created its schema (`docker compose -f
 deploy/docker-compose.yml logs -f central-server`, wait for "Started
