@@ -6,12 +6,15 @@ import com.monitoring.sentinel.central.persistence.repository.LogEntryRepository
 import com.monitoring.sentinel.central.persistence.repository.ServerRepository;
 import com.monitoring.sentinel.central.persistence.repository.ServiceMetricRepository;
 import com.monitoring.sentinel.central.persistence.repository.ServiceRepository;
+import com.monitoring.sentinel.core.enums.LogLevel;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,13 @@ import java.util.Map;
  */
 @Controller
 public class DashboardController {
+
+	// No thymeleaf-extras-java8time on the classpath, so Instant can't be formatted directly
+	// in the template - reformatted server-side into something readable instead of the raw
+	// "2026-07-24T13:29:47.964843Z" toString(). System default zone: matches what journalctl
+	// on the monitored server itself would show, which is what an operator is comparing against.
+	private static final DateTimeFormatter LOG_TIMESTAMP_FORMAT =
+			DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
 
 	private final ServerRepository serverRepository;
 	private final ServiceRepository serviceRepository;
@@ -72,8 +82,17 @@ public class DashboardController {
 		model.addAttribute("service", serviceRepository.findById(serviceId).orElseThrow());
 		model.addAttribute("metric",
 				serviceMetricRepository.findFirstByServiceIdOrderByTimestampDesc(serviceId).orElse(null));
-		model.addAttribute("logs",
-				logEntryRepository.findByServiceIdOrderByTimestampDesc(serviceId, PageRequest.of(0, 100)));
+
+		List<LogLineView> logs = logEntryRepository
+				.findByServiceIdOrderByTimestampDesc(serviceId, PageRequest.of(0, 100))
+				.stream()
+				.map(entry -> new LogLineView(
+						LOG_TIMESTAMP_FORMAT.format(entry.getTimestamp()), entry.getLevel(), entry.getMessage()))
+				.toList();
+		model.addAttribute("logs", logs);
 		return "service-detail";
+	}
+
+	public record LogLineView(String timestamp, LogLevel level, String message) {
 	}
 }

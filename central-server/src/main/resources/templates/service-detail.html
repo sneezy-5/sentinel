@@ -33,24 +33,26 @@
 
 		<div class="card">
 			<div class="card-header">Recent logs</div>
-			<table th:if="${not #lists.isEmpty(logs)}">
-				<thead>
-					<tr>
-						<th>Time</th>
-						<th>Level</th>
-						<th>Message</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr th:each="log : ${logs}">
-						<td class="mono" th:text="${log.timestamp}">-</td>
-						<td>
-							<span th:class="'badge badge-' + ${log.level.name().toLowerCase()}" th:text="${log.level}">level</span>
-						</td>
-						<td class="mono log-message" th:text="${log.message}">message</td>
-					</tr>
-				</tbody>
-			</table>
+			<div class="log-scroll" th:if="${not #lists.isEmpty(logs)}">
+				<table class="logs-table">
+					<thead>
+						<tr>
+							<th>Time</th>
+							<th>Level</th>
+							<th>Message</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr th:each="log : ${logs}" th:class="'log-row log-row-' + ${log.level.name().toLowerCase()}">
+							<td class="mono" th:text="${log.timestamp}">-</td>
+							<td>
+								<span th:class="'badge badge-' + ${log.level.name().toLowerCase()}" th:text="${log.level}">level</span>
+							</td>
+							<td class="mono log-message" th:text="${log.message}">message</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 			<div class="empty-state" th:if="${#lists.isEmpty(logs)}">
 				No logs collected for this service yet.
 			</div>

@@ -259,6 +259,44 @@ tbody tr:hover td {
 	word-break: break-word;
 }
 
+/* Up to 100 rows (DashboardController's serviceDetail query) would otherwise stretch the
+   page indefinitely - contain them in one scrollable panel with the header pinned instead. */
+.log-scroll {
+	max-height: 480px;
+	overflow-y: auto;
+}
+
+.logs-table {
+	font-size: 0.85rem;
+}
+
+.logs-table th {
+	position: sticky;
+	top: 0;
+}
+
+.logs-table th, .logs-table td {
+	padding: 8px 20px;
+}
+
+.logs-table td.mono {
+	white-space: nowrap;
+	vertical-align: top;
+}
+
+/* A colored left edge per row makes errors/warnings scannable without reading every line. */
+.logs-table tbody tr td:first-child {
+	border-left: 3px solid transparent;
+}
+
+.log-row-error td:first-child, .log-row-critical td:first-child {
+	border-left-color: var(--down);
+}
+
+.log-row-warn td:first-child, .log-row-warning td:first-child {
+	border-left-color: var(--warning);
+}
+
 .empty-state {
 	padding: 48px 20px;
 	text-align: center;
