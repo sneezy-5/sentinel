@@ -47,6 +47,9 @@ public final class AgentMain {
 		List<ServiceAdapter> adapters = List.of(
 				new DockerAdapter(), new Pm2Adapter(), new KubernetesAdapter(), new ProcessAdapter());
 
+		System.out.println("Sentinel agent starting - central=" + config.getCentralUrl()
+				+ ", pushIntervalSeconds=" + config.getPushIntervalSeconds());
+
 		while (true) {
 			runOnce(nativeStatsClient, adapters, pushClient, buffer);
 			sleep(Duration.ofSeconds(config.getPushIntervalSeconds()));
@@ -64,7 +67,10 @@ public final class AgentMain {
 					.collect(Collectors.toList());
 
 			MetricsPayload payload = toPayload(systemStats, services);
-			if (!pushClient.pushMetrics(payload)) {
+			if (pushClient.pushMetrics(payload)) {
+				System.out.println("Pushed metrics (" + services.size() + " services) at " + payload.timestamp());
+			} else {
+				System.err.println("Push failed, buffering locally: " + payload.timestamp());
 				buffer.append(payload.toString());
 			}
 		} catch (RuntimeException e) {
