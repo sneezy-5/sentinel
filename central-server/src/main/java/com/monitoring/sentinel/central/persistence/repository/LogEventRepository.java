@@ -11,4 +11,6 @@ public interface LogEventRepository extends JpaRepository<LogEventEntity, Long> 
 
 	List<LogEventEntity> findByServiceIdAndEventTypeAndTimestampAfter(
 			String serviceId, LogEventType eventType, Instant since);
+
+	void deleteByServiceId(String serviceId);
 }

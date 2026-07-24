@@ -602,3 +602,39 @@ tbody tr:hover td {
 	padding: 0 20px 16px;
 	margin: 0;
 }
+
+/* Danger zone */
+
+.danger-zone {
+	border-color: var(--down);
+}
+
+.danger-zone .card-header {
+	color: var(--down);
+}
+
+.danger-zone-body {
+	padding: 20px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 20px;
+	flex-wrap: wrap;
+}
+
+.danger-zone-body p {
+	color: var(--text-muted);
+	font-size: 0.88rem;
+	margin: 0;
+	max-width: 480px;
+}
+
+.btn-danger {
+	background: var(--down);
+	white-space: nowrap;
+}
+
+.btn-danger:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}

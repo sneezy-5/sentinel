@@ -14,4 +14,6 @@ public interface SystemMetricRepository extends JpaRepository<SystemMetricEntity
 	List<SystemMetricEntity> findByServerIdOrderByTimestampDesc(String serverId, Pageable pageable);
 
 	Optional<SystemMetricEntity> findFirstByServerIdOrderByTimestampDesc(String serverId);
+
+	void deleteByServerId(String serverId);
 }

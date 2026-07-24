@@ -89,8 +89,21 @@
 				No service discovered on this server yet.
 			</div>
 		</div>
+
+		<div class="card danger-zone">
+			<div class="card-header">Danger zone</div>
+			<div class="danger-zone-body">
+				<p>Removes this server and all its stored metrics/logs. The install token stops
+					working immediately - the agent will keep trying to push and failing until you
+					uninstall it there.</p>
+				<button type="button" id="delete-server-btn" class="btn btn-danger" th:attr="data-server-id=${server.id},data-server-name=${server.name}">
+					Delete server
+				</button>
+			</div>
+		</div>
 	</main>
 
 	<script src="/js/metrics-chart.js"></script>
+	<script src="/js/server-detail.js"></script>
 </body>
 </html>

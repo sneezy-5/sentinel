@@ -11,4 +11,6 @@ public interface ServiceMetricRepository extends JpaRepository<ServiceMetricEnti
 	List<ServiceMetricEntity> findByServiceIdOrderByTimestampDesc(String serviceId);
 
 	Optional<ServiceMetricEntity> findFirstByServiceIdOrderByTimestampDesc(String serviceId);
+
+	void deleteByServiceId(String serviceId);
 }

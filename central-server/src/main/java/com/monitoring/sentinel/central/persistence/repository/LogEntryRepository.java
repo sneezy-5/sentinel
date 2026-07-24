@@ -9,4 +9,6 @@ import java.util.List;
 public interface LogEntryRepository extends JpaRepository<LogEntryEntity, Long> {
 
 	List<LogEntryEntity> findByServiceIdOrderByTimestampDesc(String serviceId, Pageable pageable);
+
+	void deleteByServiceId(String serviceId);
 }

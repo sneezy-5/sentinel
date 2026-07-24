@@ -8,4 +8,6 @@ import java.util.List;
 public interface ServiceRepository extends JpaRepository<ServiceEntity, String> {
 
 	List<ServiceEntity> findByServerId(String serverId);
+
+	void deleteByServerId(String serverId);
 }
