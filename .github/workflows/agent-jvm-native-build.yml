@@ -22,6 +22,14 @@ on:
 
 jobs:
   build:
+    # softprops/action-gh-release races badly if multiple jobs create/update the same
+    # release concurrently - this matrix, plus agent-native-c-build.yml's own matrix, are
+    # 4 jobs total all touching the same tag's release. Same concurrency group as that
+    # workflow's job serializes all of them (cancel-in-progress: false means they queue,
+    # not cancel each other).
+    concurrency:
+      group: release-${{ github.ref_name }}
+      cancel-in-progress: false
     strategy:
       matrix:
         include:

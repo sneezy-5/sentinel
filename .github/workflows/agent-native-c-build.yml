@@ -19,6 +19,13 @@ on:
 
 jobs:
   build:
+    # Same concurrency group as agent-jvm-native-build.yml's job: 4 jobs total (2 archs x
+    # 2 workflows) all touch the same tag's GitHub Release, and softprops/action-gh-release
+    # races badly if that happens concurrently. This serializes all of them across both
+    # workflows (cancel-in-progress: false means they queue, not cancel each other).
+    concurrency:
+      group: release-${{ github.ref_name }}
+      cancel-in-progress: false
     strategy:
       matrix:
         include:
