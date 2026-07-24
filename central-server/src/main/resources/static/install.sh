@@ -4,9 +4,12 @@
 # Usage:
 #   curl -sSL https://<central>/install.sh | bash -s -- --token=xxxx --central=https://<central>
 #
-# NOT TESTED under real conditions: assumes a download endpoint exists (--download-base,
-# see comment below) that still needs to be built - an open point from the earlier
-# discussion ("the central hosts the artifacts, or GitHub releases instead").
+# Static files (this script, the systemd units, the config template) come from the
+# central itself - they're bundled into central-server's own image, nothing to deploy
+# separately for them. The two compiled binaries (sentinel-agent, sentinel-native) come
+# from GitHub Releases by default (public, no auth needed, always the latest tag) -
+# override with --download-base if you'd rather self-host them behind the central
+# (see WebConfig's /downloads/** mapping and the root README).
 
 set -euo pipefail
 
@@ -33,10 +36,7 @@ if [[ -z "$TOKEN" || -z "$CENTRAL_URL" ]]; then
   exit 1
 fi
 
-# By default, binaries are served by the central itself (no extra infra to manage);
-# --download-base lets you switch to GitHub releases later if that path is preferred,
-# without changing the install script.
-DOWNLOAD_BASE="${DOWNLOAD_BASE:-${CENTRAL_URL}/downloads}"
+DOWNLOAD_BASE="${DOWNLOAD_BASE:-https://github.com/sneezy-5/sentinel/releases/latest/download}"
 
 case "$(uname -m)" in
   x86_64) ARCH="amd64" ;;
@@ -56,25 +56,23 @@ echo "==> Installing into ${INSTALL_DIR} (arch: ${ARCH})"
 mkdir -p "${INSTALL_DIR}/bin"
 mkdir -p /var/lib/sentinel /run/sentinel
 
-echo "==> Downloading binaries"
-curl -fsSL "${DOWNLOAD_BASE}/agent/linux/${ARCH}/sentinel-agent" -o "${INSTALL_DIR}/bin/sentinel-agent"
-curl -fsSL "${DOWNLOAD_BASE}/agent-native/linux/${ARCH}/sentinel-native" -o "${INSTALL_DIR}/bin/sentinel-native"
+echo "==> Downloading binaries from ${DOWNLOAD_BASE}"
+curl -fsSL "${DOWNLOAD_BASE}/sentinel-agent-linux-${ARCH}" -o "${INSTALL_DIR}/bin/sentinel-agent"
+curl -fsSL "${DOWNLOAD_BASE}/sentinel-native-linux-${ARCH}" -o "${INSTALL_DIR}/bin/sentinel-native"
 chmod +x "${INSTALL_DIR}/bin/sentinel-agent" "${INSTALL_DIR}/bin/sentinel-native"
 
 echo "==> Writing local config (${CONFIG_PATH})"
 if [[ -f "$CONFIG_PATH" ]]; then
   echo "    Existing config found, not overwritten (reinstall?). Delete it to regenerate."
 else
-  # The script runs via "curl | bash", $0 doesn't point to anything usable on the VPS -
-  # the template comes from the same download endpoint as the binaries/units.
-  TEMPLATE=$(curl -fsSL "${DOWNLOAD_BASE}/install/monitoring-agent.yml.template")
+  TEMPLATE=$(curl -fsSL "${CENTRAL_URL}/monitoring-agent.yml.template")
   sed -e "s#__CENTRAL_URL__#${CENTRAL_URL}#" -e "s#__TOKEN__#${TOKEN}#" \
     <<< "$TEMPLATE" > "$CONFIG_PATH"
 fi
 
 echo "==> Installing systemd services"
-curl -fsSL "${DOWNLOAD_BASE}/install/monitoring-agent-collector.service" -o /etc/systemd/system/monitoring-agent-collector.service
-curl -fsSL "${DOWNLOAD_BASE}/install/monitoring-agent.service" -o /etc/systemd/system/monitoring-agent.service
+curl -fsSL "${CENTRAL_URL}/monitoring-agent-collector.service" -o /etc/systemd/system/monitoring-agent-collector.service
+curl -fsSL "${CENTRAL_URL}/monitoring-agent.service" -o /etc/systemd/system/monitoring-agent.service
 
 systemctl daemon-reload
 systemctl enable --now monitoring-agent-collector.service

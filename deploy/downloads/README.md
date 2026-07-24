@@ -1,24 +1,21 @@
 # deploy/downloads
 
-Mounted into central-server at `/opt/sentinel/downloads` (see `deploy/docker-compose.yml`
-and `WebConfig`). Served at `<central>/downloads/**` and `<central>/install.sh` - this is
-what `install/install.sh` downloads from when you run it on a monitored server.
+**Optional.** By default, `install.sh` fetches the agent binaries directly from GitHub
+Releases (public, no auth, always the latest tag) - this directory doesn't need anything
+in it for a normal setup.
 
-None of these files are committed to git (built binaries don't belong in source control).
-You need to populate this directory yourself before `install.sh` will actually work.
-Expected layout:
+Only populate this if you want to self-host the binaries instead - e.g. monitored servers
+that can't reach github.com. Mounted into central-server at `/opt/sentinel/downloads` (see
+`deploy/docker-compose.yml` and `WebConfig`), served at `<central>/downloads/**`. Point
+install.sh at it with `--download-base=https://<central>/downloads`. Expected layout:
 
 ```
 downloads/
-  agent/linux/amd64/sentinel-agent          # GraalVM native binary, module `agent`
-  agent/linux/arm64/sentinel-agent
-  agent-native/linux/amd64/sentinel-native   # C binary, module `agent-native`
-  agent-native/linux/arm64/sentinel-native
-  install/
-    install.sh
-    monitoring-agent.service
-    monitoring-agent-collector.service
-    monitoring-agent.yml.template
+  sentinel-agent-linux-amd64
+  sentinel-agent-linux-arm64
+  sentinel-native-linux-amd64
+  sentinel-native-linux-arm64
 ```
 
-See the "Deploying to production" section of the root README for exact build commands.
+(`install.sh` itself, the systemd units, and the config template are always served
+directly from central-server's own bundled static resources - never from here.)

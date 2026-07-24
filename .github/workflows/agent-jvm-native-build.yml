@@ -10,13 +10,15 @@ name: agent-jvm-native-build
 # available on this account/plan, replace this job with a buildx + QEMU build (slower, to
 # be treated as unvalidated for production without explicit testing).
 #
-# NOT RUN/VALIDATED: this workflow hasn't executed yet, it's a starting point to test.
+# Triggered on the same "v*" tag as agent-native-c-build.yml and central-server-release.yml
+# (one version tag = one release), and uploads its binary as a release asset so install.sh
+# can fetch it from https://github.com/<repo>/releases/latest/download/... without auth.
 
 on:
   workflow_dispatch:
   push:
     tags:
-      - "agent-v*"
+      - "v*"
 
 jobs:
   build:
@@ -28,6 +30,8 @@ jobs:
           - os: ubuntu-24.04-arm
             arch: arm64
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -44,9 +48,11 @@ jobs:
           chmod +x mvnw
           ./mvnw -pl agent -am -Pnative -DskipTests package
 
-      - name: Publish the artifact
-        uses: actions/upload-artifact@v4
+      - name: Rename for release
+        run: cp agent/target/sentinel-agent sentinel-agent-linux-${{ matrix.arch }}
+
+      - name: Publish to the GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: sentinel-agent-linux-${{ matrix.arch }}
-          path: agent/target/sentinel-agent
-          if-no-files-found: error
+          files: sentinel-agent-linux-${{ matrix.arch }}
+          fail_on_unmatched_files: true

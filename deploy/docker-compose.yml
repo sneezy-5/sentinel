@@ -53,9 +53,9 @@ services:
       # locally if you're running the stack on your own machine.
       - "127.0.0.1:8080:8080"
     volumes:
-      # Agent binaries + install.sh (see WebConfig, serves /downloads/** and /install.sh
-      # from here). Populate this directory yourself - see the "Deploying to production"
-      # section of the root README for what goes where and how to build it.
+      # Optional: only needed if you want to self-host the agent binaries instead of the
+      # default (GitHub Releases, see install.sh) - e.g. monitored servers without
+      # outbound access to github.com. Safe to leave empty (see WebConfig).
       - ./downloads:/opt/sentinel/downloads:ro
     depends_on:
       timescaledb:

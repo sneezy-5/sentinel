@@ -4,13 +4,14 @@ name: central-server-release
 # `docker pull ghcr.io/<owner>/<repo>-central-server:<tag>` works for anyone self-hosting
 # without needing a JDK or Maven locally.
 #
-# NOT RUN/VALIDATED: this workflow hasn't executed yet, it's a starting point to test.
+# Same "v*" tag as agent-jvm-native-build.yml and agent-native-c-build.yml: one version
+# tag builds and publishes all three artifacts together.
 
 on:
   workflow_dispatch:
   push:
     tags:
-      - "central-v*"
+      - "v*"
 
 jobs:
   build-and-push:

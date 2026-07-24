@@ -6,21 +6,21 @@ import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * Serves agent install artifacts (binaries, systemd units, config template) from an
- * external directory rather than bundling them into the jar: they're built by CI/on the
- * ops machine, independently of central-server's own release cycle (architecture doc,
- * section 5.1 - install.sh expects them under {@code <central>/downloads/...}).
+ * Optional self-hosted fallback for the agent binaries. By default install.sh fetches
+ * sentinel-agent/sentinel-native from GitHub Releases (public, no auth, no server-side
+ * setup) - this exists for setups that can't rely on outbound access to github.com from
+ * monitored servers, letting an operator drop the binaries in sentinel.downloads-dir and
+ * point install.sh at "<central>/downloads" via --download-base instead.
  *
- * Expected layout under sentinel.downloads-dir:
- *   agent/linux/{amd64,arm64}/sentinel-agent
- *   agent-native/linux/{amd64,arm64}/sentinel-native
- *   install/install.sh
- *   install/monitoring-agent.service
- *   install/monitoring-agent-collector.service
- *   install/monitoring-agent.yml.template
+ * install.sh itself, the systemd units, and the config template are NOT served from here:
+ * they're plain static resources bundled into central-server's own image (see
+ * src/main/resources/static/), covered by Spring Boot's default static handling.
  *
- * If the directory doesn't exist yet, this just means /downloads/** and /install.sh 404 -
- * safe to register unconditionally.
+ * Expected layout under sentinel.downloads-dir, if used:
+ *   sentinel-agent-linux-{amd64,arm64}
+ *   sentinel-native-linux-{amd64,arm64}
+ *
+ * If the directory doesn't exist, /downloads/** just 404s - safe to register unconditionally.
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
@@ -35,9 +35,5 @@ public class WebConfig implements WebMvcConfigurer {
 	public void addResourceHandlers(ResourceHandlerRegistry registry) {
 		registry.addResourceHandler("/downloads/**")
 				.addResourceLocations("file:" + downloadsDir);
-		// install.sh is fetched at the domain root ("curl <central>/install.sh"), not
-		// under /downloads, so the generated install command stays a plain one-liner.
-		registry.addResourceHandler("/install.sh")
-				.addResourceLocations("file:" + downloadsDir + "install/");
 	}
 }

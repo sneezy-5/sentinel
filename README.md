@@ -38,7 +38,6 @@ core/            domain model shared by central-server (plain Java, no Spring)
 central-server/  Spring Boot app: ingestion, REST API, dashboard, alerting
 agent/           runs on each monitored server (plain Java, no Spring, no dependency on core)
 agent-native/    C module for low-level system stats (built separately, see below)
-install/         systemd units + install script + default agent config template
 deploy/          production docker-compose stack (central-server + TimescaleDB + Caddy)
 ```
 
@@ -99,9 +98,10 @@ Once `central-server` is running and reachable, creating a server from the dashb
 curl -sSL https://<your-central>/install.sh | bash -s -- --token=<token> --central=https://<your-central>
 ```
 
-See `install/install.sh` — it currently expects the binaries and systemd units to be served
-from `<central>/downloads` (overridable via `--download-base`); wiring that endpoint (or
-switching to GitHub releases) is still open.
+See `central-server/src/main/resources/static/install.sh` — it fetches the two compiled
+binaries from GitHub Releases by default (public, no auth needed), and the script/systemd
+units/config template directly from the central itself (bundled static resources, always
+in sync with whatever version of central-server is running).
 
 ## Deploying to production
 
@@ -138,52 +138,29 @@ docker compose -f deploy/docker-compose.yml exec -T timescaledb \
   psql -U sentinel -d sentinel -f - < deploy/init-hypertables.sql
 ```
 
-### Populating deploy/downloads/
+### Releasing the agent binaries
 
-`install.sh` (the command the dashboard gives you when you add a server) downloads the
-agent binaries and systemd units from `<central>/downloads/...` and `<central>/install.sh`.
-central-server serves those from `deploy/downloads/` (mounted read-only into the container,
-see `WebConfig`) — nothing is baked into the image, and nothing is committed to git, since
-these are build artifacts. See `deploy/downloads/README.md` for the exact layout expected.
+Push a `v*` tag (e.g. `v0.1.0`) to trigger all three release workflows at once:
+`agent-jvm-native-build.yml` and `agent-native-c-build.yml` build the two agent binaries
+(amd64 + arm64 each) and upload them as assets on a GitHub Release matching that tag;
+`central-server-release.yml` builds and pushes the Docker image to GHCR. Nothing needs to
+be built or placed manually on the server — `install.sh` pulls
+`sentinel-agent-linux-<arch>` and `sentinel-native-linux-<arch>` straight from
+`github.com/<repo>/releases/latest/download/...`, which always resolves to the most recent
+tag with no auth required.
 
-Build them on any Linux machine matching your monitored servers' architecture (GraalVM
-native-image doesn't cross-compile):
-
-```bash
-# GraalVM (only needed for the agent's native binary, not for agent-native/make)
-curl -s "https://get.sdkman.io" | bash
-source "$HOME/.sdkman/bin/sdkman-init.sh"
-sdk list java | grep -i graalce   # pick a 17.x identifier from the list, e.g. 17.0.9-graalce
-sdk install java <the-identifier-you-picked>
-
-cd sentinel
-./mvnw -pl agent -am -Pnative -DskipTests package   # -> agent/target/sentinel-agent
-cd agent-native && make && cd ..                    # -> agent-native/bin/sentinel-native
-
-ARCH=amd64   # or arm64 - check with `uname -m` (x86_64 -> amd64, aarch64 -> arm64)
-mkdir -p deploy/downloads/agent/linux/$ARCH deploy/downloads/agent-native/linux/$ARCH deploy/downloads/install
-cp agent/target/sentinel-agent deploy/downloads/agent/linux/$ARCH/
-cp agent-native/bin/sentinel-native deploy/downloads/agent-native/linux/$ARCH/
-cp install/install.sh install/monitoring-agent.service install/monitoring-agent-collector.service install/monitoring-agent.yml.template deploy/downloads/install/
-```
-
-Since `deploy/downloads` is a bind mount, files added on the host show up in the running
-container immediately — no restart needed. The native-image build **has not been verified
-to succeed** (see the caveats in `agent/pom.xml`'s `native` profile and
-`agent/src/main/resources/META-INF/native-image/`); if it fails on a reflection error, the
-standard fix is running the agent once as a plain JVM app with
-`-agentlib:native-image-agent=config-output-dir=agent/src/main/resources/META-INF/native-image/com.monitoring/agent`
-to record the actual reflective calls, then retrying the native build with that generated
-config merged in.
+If a monitored server can't reach github.com, `deploy/downloads/` is a self-hosted fallback
+(`install.sh --download-base=https://<central>/downloads`) — see `deploy/downloads/README.md`.
 
 Visit `https://<your-domain>`, add a server from the dashboard, and run the install
 command it gives you on a second VPS to exercise the full push flow end-to-end.
 
-**None of this has been run in this environment** (no Docker available here to build/test
-the images) — treat the Dockerfile, compose stack, and SQL script as a starting point to
-validate on a real machine, not as verified working infrastructure. In particular, if
-`init-hypertables.sql`'s `DROP CONSTRAINT` fails with "constraint does not exist", check the
-actual constraint name with `\d system_metrics` inside `psql` and adjust the script.
+**The deploy stack (Docker Compose, Caddy, hypertable SQL) has not been run in this
+environment** (no Docker available here) — the three release workflows above have run
+successfully in CI, but the actual `docker compose up` on a real VPS is still unverified.
+In particular, if `init-hypertables.sql`'s `DROP CONSTRAINT` fails with "constraint does
+not exist", check the actual constraint name with `\d system_metrics` inside `psql` and
+adjust the script.
 
 ## Status
 
