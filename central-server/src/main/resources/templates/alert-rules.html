@@ -13,11 +13,12 @@
 			<div class="card-header">Add a rule</div>
 			<p class="settings-note">
 				Evaluated every 30s against the latest ingested metric (architecture doc, section
-				4.1). Leave "Service id" blank for a server-level rule (e.g. system CPU); fill it in
-				(exact id, e.g. <span class="mono">docker:registry-1</span>) for a per-service rule.
-				Metric name must match what's actually collected: <span class="mono">cpuPercent</span>
-				or <span class="mono">ramUsedMb</span> for a server, <span class="mono">cpuPercent</span>,
-				<span class="mono">memMb</span>, or <span class="mono">diskMb</span> for a service.
+				4.1). Leave "Service" on "server-level" for a rule against the system itself (e.g.
+				overall CPU); pick a specific service for a per-service rule instead.
+				<span class="mono">cpuPercent</span> and <span class="mono">ramUsedMb</span> only
+				apply to server-level rules; <span class="mono">memMb</span> and
+				<span class="mono">diskMb</span> only apply to per-service rules -
+				<span class="mono">cpuPercent</span> applies to both.
 			</p>
 			<form th:action="@{/alerts}" method="post" class="settings-form">
 				<input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
@@ -25,10 +26,18 @@
 				<select id="serverId" name="serverId" required>
 					<option th:each="server : ${servers}" th:value="${server.id}" th:text="${server.name}">server</option>
 				</select>
-				<label for="serviceId">Service id (optional)</label>
-				<input type="text" id="serviceId" name="serviceId" placeholder="e.g. docker:registry-1" autocomplete="off"/>
+				<label for="serviceId">Service</label>
+				<select id="serviceId" name="serviceId">
+					<option value="">— server-level —</option>
+					<optgroup th:each="server : ${servers}" th:label="${server.name}">
+						<option th:each="svc : ${services}" th:if="${svc.serverId == server.id}"
+							th:value="${svc.id}" th:text="${svc.id}">service</option>
+					</optgroup>
+				</select>
 				<label for="targetMetric">Metric</label>
-				<input type="text" id="targetMetric" name="targetMetric" placeholder="cpuPercent" required autocomplete="off"/>
+				<select id="targetMetric" name="targetMetric" required>
+					<option th:each="m : ${metricNames}" th:value="${m}" th:text="${m}">metric</option>
+				</select>
 				<label for="threshold">Threshold</label>
 				<input type="number" id="threshold" name="threshold" step="any" required/>
 				<label for="level">Level</label>
