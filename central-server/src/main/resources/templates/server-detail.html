@@ -31,6 +31,40 @@
 			</dl>
 		</div>
 
+		<div class="card" id="server-metrics" th:attr="data-server-id=${server.id}">
+			<div class="card-header">System metrics</div>
+			<div class="stat-tiles">
+				<div class="stat-tile" data-stat="cpu">
+					<p class="stat-label">CPU</p>
+					<p class="stat-value">—</p>
+					<svg class="sparkline"></svg>
+				</div>
+				<div class="stat-tile" data-stat="ram">
+					<p class="stat-label">Memory</p>
+					<p class="stat-value">—</p>
+					<svg class="sparkline"></svg>
+				</div>
+				<div class="stat-tile" data-stat="disk">
+					<p class="stat-label">Disk</p>
+					<p class="stat-value">—</p>
+					<svg class="sparkline"></svg>
+				</div>
+				<div class="stat-tile" data-stat="network">
+					<p class="stat-label">Network</p>
+					<p class="stat-value">—</p>
+					<svg class="sparkline"></svg>
+				</div>
+			</div>
+			<div class="chart-wrap">
+				<p class="chart-empty" hidden>No metrics yet - the agent hasn't pushed any data for this server.</p>
+				<svg class="chart-svg"></svg>
+				<div class="chart-tooltip">
+					<div class="tooltip-value">-</div>
+					<div class="tooltip-label">-</div>
+				</div>
+			</div>
+		</div>
+
 		<div class="card">
 			<div class="card-header">Services</div>
 			<table th:if="${not #lists.isEmpty(services)}">
@@ -56,5 +90,7 @@
 			</div>
 		</div>
 	</main>
+
+	<script src="/js/metrics-chart.js"></script>
 </body>
 </html>

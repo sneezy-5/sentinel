@@ -6,6 +6,7 @@ import com.monitoring.sentinel.core.model.SystemMetric;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -39,7 +40,10 @@ public class SystemMetricEntity {
 	private long rxBytes;
 	private long txBytes;
 
-	@ElementCollection
+	// Eager: this is a tiny per-row list (one entry per mounted disk), and serialized
+	// straight back out over the API - lazy would need an open Hibernate session at
+	// response-write time, which open-in-view=false intentionally doesn't provide.
+	@ElementCollection(fetch = FetchType.EAGER)
 	@CollectionTable(name = "system_metric_disks", joinColumns = @JoinColumn(name = "system_metric_id"))
 	private List<DiskUsageEmbeddable> disks;
 
@@ -105,5 +109,21 @@ public class SystemMetricEntity {
 
 	public long getRamTotalMb() {
 		return ramTotalMb;
+	}
+
+	public int getCpuCores() {
+		return cpuCores;
+	}
+
+	public long getRxBytes() {
+		return rxBytes;
+	}
+
+	public long getTxBytes() {
+		return txBytes;
+	}
+
+	public List<DiskUsageEmbeddable> getDisks() {
+		return disks;
 	}
 }
