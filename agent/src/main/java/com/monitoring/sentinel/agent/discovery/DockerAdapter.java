@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -132,16 +133,23 @@ public class DockerAdapter implements ServiceAdapter, LogSource {
 		return objectMapper.readTree(body);
 	}
 
+	// First-ever fetch for a service (no cursor yet) looks back this far instead of using
+	// Docker's own "tail=N" - discovered live that --tail forces the json-file driver to
+	// scan/seek through the *entire* log file to count lines from the end, which took over
+	// 5s (our read timeout) on a container with hours of accumulated output. Filtering by
+	// "since" instead doesn't need that scan, and a monitoring tool wants recent logs on
+	// first sight anyway, not literally the last N lines however old they are.
+	private static final Duration FIRST_FETCH_LOOKBACK = Duration.ofMinutes(5);
+
 	/**
 	 * nativeId is the container id (short form, from metadata "container_id" - Docker
-	 * resolves short ids fine). since=null means "no cursor yet", fetches the last 100
-	 * lines instead of time-filtering - the caller's cursor then takes over from here.
+	 * resolves short ids fine). since=null means "no cursor yet" - the caller's cursor
+	 * then takes over from here.
 	 */
 	@Override
 	public List<LogLine> fetchLogs(String nativeId, Instant since) {
-		String query = since == null
-				? "?stdout=true&stderr=true&timestamps=true&tail=100"
-				: "?stdout=true&stderr=true&timestamps=true&since=" + since.getEpochSecond();
+		Instant effectiveSince = since != null ? since : Instant.now().minus(FIRST_FETCH_LOOKBACK);
+		String query = "?stdout=true&stderr=true&timestamps=true&since=" + effectiveSince.getEpochSecond();
 		try {
 			byte[] raw = UnixSocketHttpClient.getBytes(DOCKER_SOCKET, "/containers/" + nativeId + "/logs" + query);
 			return demux(raw);
