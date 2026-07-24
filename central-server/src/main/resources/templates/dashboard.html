@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(title='Servers')}"></head>
+<body>
+	<div th:replace="~{fragments/layout :: topbar}"></div>
+
+	<main>
+		<div class="page-header">
+			<h1>Monitored servers</h1>
+		</div>
+
+		<div class="card">
+			<table th:if="${not #lists.isEmpty(servers)}">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Hostname</th>
+						<th>Status</th>
+						<th>Last push</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr th:each="server : ${servers}">
+						<td><a th:href="@{/servers/{id}(id=${server.id})}" th:text="${server.name}">name</a></td>
+						<td class="mono" th:text="${server.hostname}">hostname</td>
+						<td>
+							<span th:class="'badge badge-' + ${server.status.name().toLowerCase()}" th:text="${server.status}">status</span>
+						</td>
+						<td class="mono" th:text="${server.lastPushAt} ?: '—'">-</td>
+					</tr>
+				</tbody>
+			</table>
+			<div class="empty-state" th:if="${#lists.isEmpty(servers)}">
+				No server yet. Add one from the dashboard to get its install command.
+			</div>
+		</div>
+	</main>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(title=${server.name})}"></head>
+<body>
+	<div th:replace="~{fragments/layout :: topbar}"></div>
+
+	<main>
+		<a class="back-link" th:href="@{/}">&larr; Servers</a>
+
+		<div class="page-header">
+			<h1 th:text="${server.name}">name</h1>
+			<span th:class="'badge badge-' + ${server.status.name().toLowerCase()}" th:text="${server.status}">status</span>
+		</div>
+		<p class="subtitle mono" th:text="${server.hostname}">hostname</p>
+
+		<div class="card">
+			<div class="card-header">Overview</div>
+			<dl class="info-grid">
+				<div>
+					<dt>Status</dt>
+					<dd th:text="${server.status}">-</dd>
+				</div>
+				<div>
+					<dt>Last push</dt>
+					<dd th:text="${server.lastPushAt} ?: '—'">-</dd>
+				</div>
+				<div>
+					<dt>Services</dt>
+					<dd th:text="${#lists.size(services)}">0</dd>
+				</div>
+			</dl>
+		</div>
+
+		<div class="card">
+			<div class="card-header">Services</div>
+			<table th:if="${not #lists.isEmpty(services)}">
+				<thead>
+					<tr>
+						<th>Name</th>
+						<th>Type</th>
+						<th>Status</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr th:each="service : ${services}">
+						<td class="mono" th:text="${service.id}">name</td>
+						<td th:text="${service.type}">type</td>
+						<td>
+							<span th:class="'badge badge-' + ${service.status.name().toLowerCase()}" th:text="${service.status}">status</span>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+			<div class="empty-state" th:if="${#lists.isEmpty(services)}">
+				No service discovered on this server yet.
+			</div>
+		</div>
+	</main>
+</body>
+</html>

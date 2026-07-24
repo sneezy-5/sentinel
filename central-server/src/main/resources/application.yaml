@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: central-server
+  datasource:
+    url: jdbc:postgresql://localhost:5432/sentinel
+    username: sentinel
+    password: sentinel
+  jpa:
+    hibernate:
+      # `update` gives a working schema out of the box after `docker compose up -d` on a
+      # fresh clone. It only creates plain Postgres tables though, not TimescaleDB
+      # hypertables - production deployments should switch to `validate` plus a real
+      # migration tool (Flyway/Liquibase) that also runs `create_hypertable(...)` for
+      # system_metrics/service_metrics/logs_raw/log_events (see SystemMetricEntity).
+      ddl-auto: update
+    open-in-view: false
+
+server:
+  port: 8080
+
+sentinel:
+  # beyond this delay without a push, a server is marked DOWN (see ServerHealthMonitor)
+  server-down-threshold-seconds: 90
+  # public URL of this central, used to generate the agent install command (architecture
+  # doc, section 5.1) - override in a prod profile (application-prod.yaml or the
+  # SENTINEL_PUBLIC_URL env var), this placeholder only works locally.
+  public-url: "http://localhost:8080"

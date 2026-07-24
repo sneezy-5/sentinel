@@ -1,0 +1,25 @@
+[Unit]
+Description=Sentinel - native collector (CPU/RAM/disk/network)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/monitoring-agent/bin/sentinel-native
+Restart=always
+RestartSec=5
+
+# Reads /proc and /sys for ALL processes on the system (not just the service's own) - on
+# most distros that requires either root or CAP_SYS_PTRACE. Root is the simplest choice
+# for an "install and forget" agent but it's a real security trade-off that deserves an
+# explicit call rather than being left as an undocumented default:
+#   - simplest: User=root (line below)
+#   - more restricted: create a dedicated user + `AmbientCapabilities=CAP_SYS_PTRACE`
+#     (to test: sufficient for /proc/{pid}/status but not guaranteed for all of /proc/net/dev)
+User=root
+
+ReadWritePaths=/run/sentinel
+ProtectHome=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

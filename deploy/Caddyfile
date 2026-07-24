@@ -1,0 +1,3 @@
+{$SENTINEL_DOMAIN} {
+	reverse_proxy central-server:8080
+}

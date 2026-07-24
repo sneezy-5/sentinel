@@ -1,0 +1,49 @@
+name: agent-native-build
+
+# Builds the agent's GraalVM native binary for amd64 and arm64 (the vast majority of VPS
+# instances, plus the increasingly common ARM instances at various hosting providers).
+#
+# native-image doesn't cross-compile (see agent/Dockerfile.native): each arch is therefore
+# built on a runner of that same arch, not through a single job that varies a parameter.
+# ubuntu-24.04-arm is a native arm64 runner hosted by GitHub (public repos); if it's not
+# available on this account/plan, replace this job with a buildx + QEMU build (slower, to
+# be treated as unvalidated for production without explicit testing).
+#
+# NOT RUN/VALIDATED: this workflow hasn't executed yet, it's a starting point to test.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "agent-v*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GraalVM (muslib for a static binary)
+        uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: "17"
+          distribution: "graalvm"
+          native-image-musl: "true"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build the agent's native binary
+        run: ./mvnw -pl agent -am -Pnative -DskipTests package
+
+      - name: Publish the artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-agent-linux-${{ matrix.arch }}
+          path: agent/target/sentinel-agent
+          if-no-files-found: error

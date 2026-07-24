@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>com.monitoring</groupId>
+	<artifactId>sentinel</artifactId>
+	<version>0.0.1-SNAPSHOT</version>
+	<packaging>pom</packaging>
+	<name>sentinel</name>
+	<description>Multi-server monitoring tool - multi-module build aggregator</description>
+
+	<!--
+		This pom is just an aggregator: it doesn't carry the Spring Boot dependencies
+		(those live in central-server/pom.xml, the only module that needs them).
+		agent-native (C module) is intentionally not listed here: Maven doesn't know how to
+		build it, it's built separately via its own Makefile (see agent-native/README.md).
+	-->
+	<modules>
+		<module>core</module>
+		<module>central-server</module>
+		<module>agent</module>
+	</modules>
+
+	<properties>
+		<maven.compiler.release>17</maven.compiler.release>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<junit.version>6.0.3</junit.version>
+		<surefire.version>3.5.2</surefire.version>
+	</properties>
+</project>

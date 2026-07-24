@@ -1,0 +1,76 @@
+package com.monitoring.sentinel.central.alerting;
+
+import com.monitoring.sentinel.central.persistence.entity.ServiceMetricEntity;
+import com.monitoring.sentinel.central.persistence.entity.SystemMetricEntity;
+import com.monitoring.sentinel.central.persistence.repository.AlertRuleRepository;
+import com.monitoring.sentinel.central.persistence.repository.ServiceMetricRepository;
+import com.monitoring.sentinel.central.persistence.repository.SystemMetricRepository;
+import com.monitoring.sentinel.core.model.AlertRule;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+import java.util.Optional;
+import java.util.OptionalDouble;
+
+/** Threshold evaluation (architecture doc, section 4.1), read from the latest ingested metrics. */
+@Component
+public class AlertEvaluationService {
+
+	private final AlertRuleRepository alertRuleRepository;
+	private final SystemMetricRepository systemMetricRepository;
+	private final ServiceMetricRepository serviceMetricRepository;
+	private final AlertNotifier alertNotifier;
+
+	public AlertEvaluationService(
+			AlertRuleRepository alertRuleRepository,
+			SystemMetricRepository systemMetricRepository,
+			ServiceMetricRepository serviceMetricRepository,
+			AlertNotifier alertNotifier) {
+		this.alertRuleRepository = alertRuleRepository;
+		this.systemMetricRepository = systemMetricRepository;
+		this.serviceMetricRepository = serviceMetricRepository;
+		this.alertNotifier = alertNotifier;
+	}
+
+	@Scheduled(fixedDelayString = "PT30S")
+	public void evaluateRules() {
+		for (var ruleEntity : alertRuleRepository.findByEnabledTrue()) {
+			AlertRule rule = ruleEntity.toModel();
+			OptionalDouble actualValue = readMetric(rule);
+			if (actualValue.isPresent() && actualValue.getAsDouble() > rule.getThreshold()) {
+				alertNotifier.notify(rule, actualValue.getAsDouble());
+			}
+		}
+	}
+
+	private OptionalDouble readMetric(AlertRule rule) {
+		if (rule.getServiceId() != null) {
+			Optional<ServiceMetricEntity> metric =
+					serviceMetricRepository.findFirstByServiceIdOrderByTimestampDesc(rule.getServiceId());
+			return metric.map(m -> extractServiceMetric(m, rule.getTargetMetric()))
+					.map(OptionalDouble::of)
+					.orElse(OptionalDouble.empty());
+		}
+		Optional<SystemMetricEntity> metric =
+				systemMetricRepository.findFirstByServerIdOrderByTimestampDesc(rule.getServerId());
+		return metric.map(m -> extractSystemMetric(m, rule.getTargetMetric()))
+				.map(OptionalDouble::of)
+				.orElse(OptionalDouble.empty());
+	}
+
+	private double extractSystemMetric(SystemMetricEntity metric, String targetMetric) {
+		return switch (targetMetric) {
+			case "cpuPercent" -> metric.getCpuPercent();
+			case "ramUsedMb" -> metric.getRamUsedMb();
+			default -> throw new IllegalArgumentException("Unknown system metric: " + targetMetric);
+		};
+	}
+
+	private double extractServiceMetric(ServiceMetricEntity metric, String targetMetric) {
+		return switch (targetMetric) {
+			case "cpuPercent" -> metric.getCpuPercent();
+			case "memMb" -> metric.getMemMb();
+			default -> throw new IllegalArgumentException("Unknown service metric: " + targetMetric);
+		};
+	}
+}

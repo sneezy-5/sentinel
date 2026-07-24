@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>com.monitoring</groupId>
+		<artifactId>sentinel</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<relativePath>../pom.xml</relativePath>
+	</parent>
+
+	<artifactId>agent</artifactId>
+	<packaging>jar</packaging>
+	<name>agent</name>
+	<description>Runs on each monitored server: discovery + push to the central. No Spring, no dependency on `core` (see architecture doc, section 3.1).</description>
+
+	<dependencies>
+		<!-- JSON for outgoing payloads (dto/) and the local config -->
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>2.18.2</version>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.datatype</groupId>
+			<artifactId>jackson-datatype-jsr310</artifactId>
+			<version>2.18.2</version>
+		</dependency>
+		<dependency>
+			<groupId>org.yaml</groupId>
+			<artifactId>snakeyaml</artifactId>
+			<version>2.3</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>${junit.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<version>${surefire.version}</version>
+			</plugin>
+			<plugin>
+				<!-- Fat jar: the classic JVM path, kept as a fallback for local dev and for
+				     any target the native binary hasn't been built for yet. -->
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>3.6.0</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+						<configuration>
+							<transformers>
+								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+									<mainClass>com.monitoring.sentinel.agent.AgentMain</mainClass>
+								</transformer>
+							</transformers>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+
+	<profiles>
+		<profile>
+			<!--
+				Only activated with `mvn -Pnative -pl agent -am package` (or native:compile),
+				on a GraalVM JDK. Never runs during a normal build/test, so it can't break
+				anything on a regular JDK (see agent-native-build.yml for CI usage).
+				Documented caveat, see reflect-config.json: SnakeYAML (local config) and the
+				Jackson DTOs (records) rely on reflection, which native-image doesn't support
+				without explicit metadata - to validate/complete by actually testing the
+				binary, this config is a starting point, not a guarantee.
+			-->
+			<id>native</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.graalvm.buildtools</groupId>
+						<artifactId>native-maven-plugin</artifactId>
+						<version>0.10.4</version>
+						<extensions>true</extensions>
+						<executions>
+							<execution>
+								<id>build-native</id>
+								<goals>
+									<goal>compile</goal>
+								</goals>
+								<phase>package</phase>
+							</execution>
+						</executions>
+						<configuration>
+							<mainClass>com.monitoring.sentinel.agent.AgentMain</mainClass>
+							<imageName>sentinel-agent</imageName>
+							<buildArgs>
+								<!-- A binary that only half-starts (partial JVM fallback) is worse than
+								     a hard build failure for an "install and forget" agent. -->
+								<buildArg>--no-fallback</buildArg>
+								<!-- PushClient (java.net.http) makes HTTPS requests to the central. -->
+								<buildArg>--enable-http</buildArg>
+								<buildArg>--enable-https</buildArg>
+								<buildArg>-H:+ReportExceptionStackTraces</buildArg>
+							</buildArgs>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+</project>

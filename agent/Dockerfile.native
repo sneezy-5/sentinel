@@ -1,0 +1,34 @@
+# Builds the agent's GraalVM native binary (module `agent`), for the platform this build
+# runs on (TARGETARCH is provided by buildx: amd64 or arm64).
+#
+# native-image doesn't cross-compile: this Dockerfile does NOT produce an ARM binary from
+# an amd64 machine (or vice versa) just by changing TARGETARCH - you need either:
+#   - `docker buildx build --platform linux/amd64,linux/arm64 -o dist .` with buildx runners
+#     capable of both archs (QEMU or native builders), or
+#   - running this build separately on a native CI runner per arch (see
+#     .github/workflows/agent-native-build.yml, which favors this option: slower via QEMU,
+#     a native binary compiled under emulation is a point to validate before trusting it
+#     in production).
+#
+# musl (the -muslib variant) gives a static binary, with no dependency on the target VPS's
+# glibc version - consistent with the "install and forget" goal across varied distros.
+#
+# NOT TESTED in this environment (no GraalVM/Linux Docker available here): validate before
+# any real use, especially java.net.http's behavior (TLS/DNS) once static.
+
+FROM ghcr.io/graalvm/native-image-community:17-muslib AS build
+
+WORKDIR /workspace
+COPY pom.xml mvnw mvnw.cmd /workspace/
+COPY .mvn /workspace/.mvn
+COPY core /workspace/core
+COPY central-server /workspace/central-server
+COPY agent /workspace/agent
+
+# central-server isn't needed to build the agent, but it's part of the Maven reactor
+# (same parent coordinates): left in place, `-pl agent -am` only compiles its actual
+# dependencies (core), not central-server.
+RUN chmod +x mvnw && ./mvnw -q -pl agent -am -Pnative -DskipTests package
+
+FROM scratch AS export
+COPY --from=build /workspace/agent/target/sentinel-agent /sentinel-agent

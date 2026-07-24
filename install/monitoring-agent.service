@@ -1,0 +1,24 @@
+[Unit]
+Description=Sentinel - agent (discovery + push to the central)
+After=network-online.target monitoring-agent-collector.service
+Wants=network-online.target
+Requires=monitoring-agent-collector.service
+
+[Service]
+Type=simple
+ExecStart=/opt/monitoring-agent/bin/sentinel-agent /opt/monitoring-agent/monitoring-agent.yml
+Restart=always
+RestartSec=5
+
+# Docker (/var/run/docker.sock), PM2 (~/.pm2), K8s (kubeconfig) discovery: this process
+# needs access to these sockets/files, often restricted to root or the docker group.
+# Root stays the default to remain "install and forget" (same trade-off as the collector)
+# - narrow it down later if needed (e.g. add the user to the docker group instead of
+# running as root, for the Docker adapter only).
+User=root
+
+ReadWritePaths=/var/lib/sentinel /run/sentinel
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+	<meta charset="UTF-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1"/>
+	<title th:text="${title} + ' - Sentinel'">Sentinel</title>
+	<link rel="stylesheet" th:href="@{/css/sentinel.css}"/>
+</head>
+<body>
+	<header class="topbar" th:fragment="topbar">
+		<a class="brand" th:href="@{/}"><span class="dot"></span> Sentinel</a>
+		<nav>
+			<a th:href="@{/}">Servers</a>
+		</nav>
+	</header>
+</body>
+</html>

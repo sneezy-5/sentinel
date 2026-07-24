@@ -1,0 +1,9 @@
+.git
+target/
+agent/
+agent-native/
+install/
+.github/
+*.md
+.idea
+.vscode
