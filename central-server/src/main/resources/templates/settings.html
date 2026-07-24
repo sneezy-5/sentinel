@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(title='Settings')}"></head>
+<body>
+	<div th:replace="~{fragments/layout :: topbar}"></div>
+
+	<main>
+		<div class="page-header">
+			<h1>Settings</h1>
+		</div>
+
+		<div class="card">
+			<div class="card-header">Admin password</div>
+			<p th:if="${passwordError}" class="error-text" th:text="${passwordError}">error</p>
+			<p th:if="${passwordSuccess}" class="flash-success">Password updated.</p>
+			<form th:action="@{/settings/password}" method="post" class="settings-form">
+				<input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+				<label for="currentPassword">Current password</label>
+				<input type="password" id="currentPassword" name="currentPassword" required autocomplete="current-password"/>
+				<label for="newPassword">New password</label>
+				<input type="password" id="newPassword" name="newPassword" required minlength="8" autocomplete="new-password"/>
+				<label for="confirmPassword">Confirm new password</label>
+				<input type="password" id="confirmPassword" name="confirmPassword" required minlength="8" autocomplete="new-password"/>
+				<button type="submit" class="btn">Change password</button>
+			</form>
+		</div>
+
+		<div class="card">
+			<div class="card-header">Email alerts</div>
+			<p class="settings-note">
+				Sends an email whenever an alert rule's threshold is exceeded (architecture doc,
+				section 4.1). Works with any SMTP provider - a normal SMTP relay account, an app
+				password from a webmail provider, or a transactional-email service's SMTP endpoint.
+			</p>
+			<p th:if="${emailSuccess}" class="flash-success">Email settings saved.</p>
+			<form th:action="@{/settings/email}" method="post" class="settings-form" th:object="${alertSettings}">
+				<input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+				<label>
+					<input type="checkbox" th:field="*{emailEnabled}"/>
+					Enable email alerts
+				</label>
+				<label for="smtpHost">SMTP host</label>
+				<input type="text" id="smtpHost" th:field="*{smtpHost}" placeholder="smtp.example.com"/>
+				<label for="smtpPort">SMTP port</label>
+				<input type="number" id="smtpPort" th:field="*{smtpPort}" placeholder="587"/>
+				<label for="smtpUsername">SMTP username</label>
+				<input type="text" id="smtpUsername" th:field="*{smtpUsername}" autocomplete="off"/>
+				<label for="smtpPassword">SMTP password</label>
+				<input type="password" id="smtpPassword" name="smtpPassword" autocomplete="off" placeholder="Leave blank to keep the current one"/>
+				<label for="fromAddress">From address</label>
+				<input type="email" id="fromAddress" th:field="*{fromAddress}" placeholder="sentinel@example.com"/>
+				<label for="toAddress">Send alerts to</label>
+				<input type="email" id="toAddress" th:field="*{toAddress}" placeholder="you@example.com"/>
+				<button type="submit" class="btn">Save email settings</button>
+			</form>
+		</div>
+	</main>
+</body>
+</html>

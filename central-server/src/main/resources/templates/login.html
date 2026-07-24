@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(title='Log in')}"></head>
+<body>
+	<main class="login-main">
+		<div class="card login-card">
+			<div class="card-header">
+				<span class="dot"></span> Sentinel
+			</div>
+			<form th:action="@{/login}" method="post" class="login-form">
+				<input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+				<p th:if="${loginFailed}" class="error-text login-error">Invalid username or password.</p>
+				<label for="username">Username</label>
+				<input type="text" id="username" name="username" required autofocus autocomplete="username"/>
+				<label for="password">Password</label>
+				<input type="password" id="password" name="password" required autocomplete="current-password"/>
+				<button type="submit" class="btn">Log in</button>
+			</form>
+		</div>
+	</main>
+</body>
+</html>

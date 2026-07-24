@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+#
+# Installs the central-server stack (central-server + TimescaleDB, and Caddy unless you
+# already have a reverse proxy) without cloning the repo - central-server itself doesn't
+# exist yet on a fresh box, so this can't be served BY central-server the way install.sh
+# is; it's fetched from GitHub's raw content instead.
+#
+# Usage:
+#   curl -sSL https://raw.githubusercontent.com/sneezy-5/sentinel/main/deploy/install-central.sh \
+#     | bash -s -- --domain=monitor.example.com --db-password=<password> [--admin-password=<password>] [--no-caddy]
+#
+# Requires Docker already installed. Bundling a single self-contained binary (as asked
+# for) isn't practical for central-server specifically - unlike the agent, it needs a real
+# running Postgres/TimescaleDB next to it, which can't be baked into one executable. This
+# script is the practical equivalent: no git clone, no manual file editing, one command.
+#
+# NOT TESTED end-to-end on a fresh box (no server available to run this against while
+# writing it) - the individual pieces (docker-compose.yml, Caddyfile, init-hypertables.sql)
+# have been exercised manually in this conversation, but not through this exact script.
+
+set -euo pipefail
+
+RAW_BASE="https://raw.githubusercontent.com/sneezy-5/sentinel/main/deploy"
+INSTALL_DIR="/opt/sentinel"
+
+DOMAIN=""
+DB_PASSWORD=""
+ADMIN_PASSWORD=""
+WITH_CADDY=true
+
+for arg in "$@"; do
+  case "$arg" in
+    --domain=*) DOMAIN="${arg#*=}" ;;
+    --db-password=*) DB_PASSWORD="${arg#*=}" ;;
+    --admin-password=*) ADMIN_PASSWORD="${arg#*=}" ;;
+    --no-caddy) WITH_CADDY=false ;;
+    *)
+      echo "Unknown argument: $arg" >&2
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -z "$DOMAIN" || -z "$DB_PASSWORD" ]]; then
+  echo "Usage: install-central.sh --domain=<domain> --db-password=<password> [--admin-password=<password>] [--no-caddy]" >&2
+  exit 1
+fi
+
+if [[ "$(id -u)" -ne 0 ]]; then
+  echo "This script must be run as root (writes to /opt and manages Docker)." >&2
+  exit 1
+fi
+
+if ! command -v docker &> /dev/null; then
+  echo "Docker is required but not found - install it first: https://docs.docker.com/engine/install/" >&2
+  exit 1
+fi
+
+if ! docker compose version &> /dev/null; then
+  echo "The Docker Compose plugin is required but not found (docker compose, not docker-compose)." >&2
+  exit 1
+fi
+
+# A generated password beats a hardcoded default landing in shell history across many
+# installs - openssl is virtually always present alongside Docker, no extra dependency.
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-$(openssl rand -base64 18)}"
+
+echo "==> Setting up Sentinel central in ${INSTALL_DIR}"
+mkdir -p "$INSTALL_DIR"
+cd "$INSTALL_DIR"
+
+curl -fsSL "${RAW_BASE}/docker-compose.yml" -o docker-compose.yml
+curl -fsSL "${RAW_BASE}/Caddyfile" -o Caddyfile
+curl -fsSL "${RAW_BASE}/init-hypertables.sql" -o init-hypertables.sql
+curl -fsSL "${RAW_BASE}/nginx-central-server.conf.example" -o nginx-central-server.conf.example
+
+cat > .env <<EOF
+SENTINEL_DOMAIN=${DOMAIN}
+DB_PASSWORD=${DB_PASSWORD}
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=${ADMIN_PASSWORD}
+EOF
+chmod 600 .env
+
+echo "==> Starting timescaledb + central-server"
+docker compose --env-file .env up -d timescaledb central-server
+
+if [[ "$WITH_CADDY" == true ]]; then
+  echo "==> Starting caddy (skip with --no-caddy if you already run a reverse proxy on 80/443)"
+  docker compose --env-file .env up -d caddy
+else
+  echo "==> Skipping caddy - see nginx-central-server.conf.example to wire up an existing reverse proxy."
+fi
+
+echo "==> Waiting for central-server to create its schema..."
+sleep 15
+docker compose --env-file .env exec -T timescaledb psql -U sentinel -d sentinel -f - < init-hypertables.sql \
+  || echo "Hypertable conversion failed or partially applied - see the root README's Deploying section to retry/debug."
+
+echo
+echo "==> Done."
+echo "    Admin username: admin"
+echo "    Admin password: ${ADMIN_PASSWORD}"
+echo "    (save this now - it's only shown here, change it from the Settings page after logging in)"
+if [[ "$WITH_CADDY" == true ]]; then
+  echo "    Dashboard: https://${DOMAIN}"
+else
+  echo "    Dashboard: point your existing reverse proxy at 127.0.0.1:8090, then https://${DOMAIN}"
+fi

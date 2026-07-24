@@ -106,11 +106,29 @@ in sync with whatever version of central-server is running).
 ## Deploying to production
 
 The `deploy/` stack runs central-server + TimescaleDB + Caddy (automatic HTTPS via Let's
-Encrypt) with one command. HTTPS isn't optional here: agents authenticate with a bearer
-token over the wire, and `install.sh` is fetched via `curl | bash` — both need a real
-certificate, not just `http://`.
+Encrypt). HTTPS isn't optional here: agents authenticate with a bearer token over the
+wire, and `install.sh` is fetched via `curl | bash` — both need a real certificate, not
+just `http://`.
 
-On a fresh VPS with Docker installed:
+### Quickest path: no git clone
+
+On a fresh VPS with Docker already installed and a DNS A record already pointing at it:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/sneezy-5/sentinel/main/deploy/install-central.sh \
+  | sudo bash -s -- --domain=monitor.example.com --db-password=<a-real-password>
+```
+
+Add `--no-caddy` if this host already runs nginx/another reverse proxy on 80/443 (see
+`deploy/nginx-central-server.conf.example`, downloaded alongside the rest). The script
+prints a generated admin password once at the end — save it immediately, change it from
+the Settings page after logging in. This has **not been run end-to-end on a fresh box**
+while writing it; the individual steps have been exercised manually earlier in this
+project's history, but not through this exact script.
+
+### Alternative: clone first
+
+Useful if you want to read/edit the compose file before running it:
 
 ```bash
 git clone <this-repo>
@@ -118,6 +136,7 @@ cd sentinel
 cp deploy/.env.example deploy/.env
 # edit deploy/.env: SENTINEL_DOMAIN must have a DNS A record pointing at this VPS already,
 # Caddy requests the cert on first request and will fail if the domain doesn't resolve.
+# Also set ADMIN_PASSWORD - this seeds the dashboard login on first boot (see AdminSeeder).
 
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 ```
@@ -137,6 +156,16 @@ when the database container first initializes:
 docker compose -f deploy/docker-compose.yml exec -T timescaledb \
   psql -U sentinel -d sentinel -f - < deploy/init-hypertables.sql
 ```
+
+The dashboard requires logging in (`ADMIN_USERNAME`/`ADMIN_PASSWORD` from `deploy/.env`,
+only used to create the account on first boot - see `AdminSeeder`). Change the password
+from the Settings page after the first login; `/api/agents/**` (agent pushes) and static
+assets (`install.sh`, systemd units, CSS/JS) stay reachable without a session, since a
+monitored server running `install.sh` has no way to log in.
+
+The Settings page also configures SMTP for email alerts (any provider - host/port/user/
+password/from/to). Threshold rules themselves (`AlertRule`) still have no UI to create
+them yet — see the "Status" section below.
 
 ### Releasing the agent binaries
 

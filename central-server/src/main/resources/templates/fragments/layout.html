@@ -5,12 +5,19 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1"/>
 	<title th:text="${title} + ' - Sentinel'">Sentinel</title>
 	<link rel="stylesheet" th:href="@{/css/sentinel.css}"/>
+	<meta name="_csrf" th:if="${_csrf != null}" th:content="${_csrf.token}"/>
+	<meta name="_csrf_header" th:if="${_csrf != null}" th:content="${_csrf.headerName}"/>
 </head>
 <body>
 	<header class="topbar" th:fragment="topbar">
 		<a class="brand" th:href="@{/}"><span class="dot"></span> Sentinel</a>
 		<nav>
 			<a th:href="@{/}">Servers</a>
+			<a th:href="@{/settings}">Settings</a>
+			<form th:action="@{/logout}" method="post" class="logout-form">
+				<input type="hidden" th:if="${_csrf != null}" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+				<button type="submit" class="link-button">Log out</button>
+			</form>
 		</nav>
 	</header>
 </body>

@@ -83,10 +83,37 @@ a:hover {
 	display: inline-block;
 }
 
+.topbar nav {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+}
+
 .topbar nav a {
 	color: var(--text-muted);
 	font-size: 0.9rem;
 	font-weight: 500;
+}
+
+.logout-form {
+	display: inline;
+}
+
+.link-button {
+	background: none;
+	border: none;
+	padding: 0;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: 0.9rem;
+	font-weight: 500;
+	font-family: inherit;
+	cursor: pointer;
+}
+
+.link-button:hover {
+	color: var(--text);
+	text-decoration: underline;
 }
 
 main {
@@ -457,4 +484,121 @@ tbody tr:hover td {
 .chart-tooltip .tooltip-label {
 	color: var(--text-muted);
 	margin-top: 2px;
+}
+
+/* Login page */
+
+.login-main {
+	min-height: 100vh;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 24px;
+}
+
+.login-card {
+	width: 100%;
+	max-width: 340px;
+}
+
+.login-card .card-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-weight: 700;
+}
+
+.login-card .card-header .dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: var(--accent);
+	display: inline-block;
+}
+
+.login-form {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 20px;
+}
+
+.login-form label {
+	font-size: 0.82rem;
+	color: var(--text-muted);
+	margin-top: 8px;
+}
+
+.login-form input {
+	padding: 9px 12px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--bg);
+	color: var(--text);
+	font-size: 0.92rem;
+	font-family: inherit;
+}
+
+.login-form input:focus {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+
+.login-form .btn {
+	margin-top: 16px;
+}
+
+.login-error {
+	padding: 0;
+	margin: 0 0 4px;
+}
+
+/* Settings page */
+
+.settings-form {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 20px;
+	max-width: 420px;
+}
+
+.settings-form label {
+	font-size: 0.82rem;
+	color: var(--text-muted);
+	margin-top: 10px;
+}
+
+.settings-form input {
+	padding: 9px 12px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--bg);
+	color: var(--text);
+	font-size: 0.92rem;
+	font-family: inherit;
+}
+
+.settings-form input:focus {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+
+.settings-form .btn {
+	margin-top: 16px;
+	align-self: flex-start;
+}
+
+.settings-note {
+	color: var(--text-muted);
+	font-size: 0.82rem;
+	padding: 0 20px 16px;
+	margin: 0;
+}
+
+.flash-success {
+	color: var(--up);
+	font-size: 0.88rem;
+	padding: 0 20px 16px;
+	margin: 0;
 }

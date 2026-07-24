@@ -28,3 +28,9 @@ sentinel:
   # external directory serving agent binaries + install script (see WebConfig) - mounted
   # as a volume in deploy/docker-compose.yml, doesn't need to exist for the app to start.
   downloads-dir: "/opt/sentinel/downloads"
+  admin:
+    # Only used to create the admin account on first boot (see AdminSeeder) - after that
+    # the password lives in the DB and these values are ignored. Change this placeholder
+    # immediately after first login, from the Settings page.
+    username: admin
+    password: change-me

@@ -1,3 +1,15 @@
+// Spring Security's CSRF protection covers session-authenticated POSTs, including this
+// fetch() call - the token is exposed via meta tags (see fragments/layout.html) since
+// this is a fetch, not a plain form submit that could carry a hidden input instead.
+function csrfHeader() {
+	const token = document.querySelector('meta[name="_csrf"]');
+	const header = document.querySelector('meta[name="_csrf_header"]');
+	if (!token || !header) {
+		return {};
+	}
+	return { [header.content]: token.content };
+}
+
 document.addEventListener("DOMContentLoaded", () => {
 	const form = document.getElementById("add-server-form");
 	if (!form) {
@@ -16,7 +28,10 @@ document.addEventListener("DOMContentLoaded", () => {
 		const params = new URLSearchParams(new FormData(form));
 		let response;
 		try {
-			response = await fetch("/api/servers?" + params.toString(), { method: "POST" });
+			response = await fetch("/api/servers?" + params.toString(), {
+				method: "POST",
+				headers: csrfHeader(),
+			});
 		} catch (networkError) {
 			errorEl.textContent = "Network error: " + networkError.message;
 			errorEl.hidden = false;

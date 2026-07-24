@@ -9,6 +9,7 @@ import com.monitoring.sentinel.core.model.AlertRule;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
 
@@ -19,17 +20,17 @@ public class AlertEvaluationService {
 	private final AlertRuleRepository alertRuleRepository;
 	private final SystemMetricRepository systemMetricRepository;
 	private final ServiceMetricRepository serviceMetricRepository;
-	private final AlertNotifier alertNotifier;
+	private final List<AlertNotifier> alertNotifiers;
 
 	public AlertEvaluationService(
 			AlertRuleRepository alertRuleRepository,
 			SystemMetricRepository systemMetricRepository,
 			ServiceMetricRepository serviceMetricRepository,
-			AlertNotifier alertNotifier) {
+			List<AlertNotifier> alertNotifiers) {
 		this.alertRuleRepository = alertRuleRepository;
 		this.systemMetricRepository = systemMetricRepository;
 		this.serviceMetricRepository = serviceMetricRepository;
-		this.alertNotifier = alertNotifier;
+		this.alertNotifiers = alertNotifiers;
 	}
 
 	@Scheduled(fixedDelayString = "PT30S")
@@ -38,7 +39,11 @@ public class AlertEvaluationService {
 			AlertRule rule = ruleEntity.toModel();
 			OptionalDouble actualValue = readMetric(rule);
 			if (actualValue.isPresent() && actualValue.getAsDouble() > rule.getThreshold()) {
-				alertNotifier.notify(rule, actualValue.getAsDouble());
+				// Every configured channel gets a shot - a broken one (e.g. email
+				// misconfigured) must not stop the others (e.g. the log line) from firing.
+				for (AlertNotifier notifier : alertNotifiers) {
+					notifier.notify(rule, actualValue.getAsDouble());
+				}
 			}
 		}
 	}

@@ -53,6 +53,10 @@ services:
       # ddl-auto stays "update" here too: the hypertable conversion above only runs once,
       # against tables Hibernate itself creates on first boot - see init-hypertables.sql.
       SENTINEL_PUBLIC_URL: https://${SENTINEL_DOMAIN:?set SENTINEL_DOMAIN in deploy/.env}
+      # Only used to create the admin account on first boot - see AdminSeeder. Change the
+      # password from the Settings page after logging in once; these are ignored after that.
+      SENTINEL_ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      SENTINEL_ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in deploy/.env}
     ports:
       # Bound to loopback only, not the public interface: real traffic must go through
       # Caddy or an existing reverse proxy (TLS). Host-side port is 8090, not 8080 - on a
