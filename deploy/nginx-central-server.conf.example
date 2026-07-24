@@ -1,0 +1,28 @@
+# Example vhost for an nginx that's already running on this host (80/443 already taken,
+# so the `caddy` service in docker-compose.yml isn't used - see its top comment).
+#
+# Adapt and drop into /etc/nginx/sites-available/, symlink into sites-enabled/, then
+# get a cert for SENTINEL_DOMAIN however you normally do on this box (certbot, etc.) -
+# this example assumes one already exists at the paths below.
+
+server {
+    listen 80;
+    server_name SENTINEL_DOMAIN;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name SENTINEL_DOMAIN;
+
+    ssl_certificate     /etc/letsencrypt/live/SENTINEL_DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/SENTINEL_DOMAIN/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

@@ -4,6 +4,12 @@
 # rather than built locally - no JDK/Maven needed on the server this runs on:
 #   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
 #
+# Already running nginx/another reverse proxy on 80/443 on this host? Don't bring up
+# `caddy` at all - it'll fail to bind those ports. Instead:
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d timescaledb central-server
+# central-server is bound to 127.0.0.1:8080 (see below), so point your existing reverse
+# proxy at that - see deploy/nginx-central-server.conf.example for a ready-to-adapt vhost.
+#
 # If the image pull fails with "denied"/"unauthorized": the GHCR package is probably still
 # private (Actions-published packages default to private even in a public repo) - go to
 # the package's settings on GitHub and set visibility to public, or `docker login ghcr.io`
