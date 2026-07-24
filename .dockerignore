@@ -1,6 +1,11 @@
 .git
 target/
-agent/
+# central-server/Dockerfile needs agent/pom.xml (reactor topology - see that Dockerfile's
+# comment) even though it never builds the agent module itself. .dockerignore can't
+# re-include a file once its parent directory is excluded, so these are listed
+# individually instead of excluding all of `agent/`.
+agent/src
+agent/Dockerfile.native
 agent-native/
 install/
 .github/
