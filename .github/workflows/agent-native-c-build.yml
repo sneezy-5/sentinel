@@ -1,0 +1,41 @@
+name: agent-native-c-build
+
+# Builds the C `agent-native` module (amd64 and arm64) via its Makefile - not to be
+# confused with `agent-jvm-native-build.yml`, which builds the Java `agent` module's
+# GraalVM binary. Both are needed by install.sh (architecture doc, section 5.1).
+#
+# No cross-compilation: built directly on a runner matching each target arch (gcc/make
+# come preinstalled on GitHub-hosted ubuntu runners, no extra setup needed).
+#
+# NOT RUN/VALIDATED: this workflow hasn't executed yet, it's a starting point to test.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "agent-native-v*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          cd agent-native
+          make
+
+      - name: Publish the artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-native-linux-${{ matrix.arch }}
+          path: agent-native/bin/sentinel-native
+          if-no-files-found: error

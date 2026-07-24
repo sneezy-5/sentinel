@@ -38,3 +38,7 @@ agent-native/bin/
 ### local secrets ###
 deploy/.env
 
+### built agent artifacts, populated manually or by CI, never committed ###
+deploy/downloads/*
+!deploy/downloads/README.md
+

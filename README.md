@@ -133,6 +133,44 @@ docker compose -f deploy/docker-compose.yml exec -T timescaledb \
   psql -U sentinel -d sentinel -f - < deploy/init-hypertables.sql
 ```
 
+### Populating deploy/downloads/
+
+`install.sh` (the command the dashboard gives you when you add a server) downloads the
+agent binaries and systemd units from `<central>/downloads/...` and `<central>/install.sh`.
+central-server serves those from `deploy/downloads/` (mounted read-only into the container,
+see `WebConfig`) — nothing is baked into the image, and nothing is committed to git, since
+these are build artifacts. See `deploy/downloads/README.md` for the exact layout expected.
+
+Build them on any Linux machine matching your monitored servers' architecture (GraalVM
+native-image doesn't cross-compile):
+
+```bash
+# GraalVM (only needed for the agent's native binary, not for agent-native/make)
+curl -s "https://get.sdkman.io" | bash
+source "$HOME/.sdkman/bin/sdkman-init.sh"
+sdk list java | grep -i graalce   # pick a 17.x identifier from the list, e.g. 17.0.9-graalce
+sdk install java <the-identifier-you-picked>
+
+cd sentinel
+./mvnw -pl agent -am -Pnative -DskipTests package   # -> agent/target/sentinel-agent
+cd agent-native && make && cd ..                    # -> agent-native/bin/sentinel-native
+
+ARCH=amd64   # or arm64 - check with `uname -m` (x86_64 -> amd64, aarch64 -> arm64)
+mkdir -p deploy/downloads/agent/linux/$ARCH deploy/downloads/agent-native/linux/$ARCH deploy/downloads/install
+cp agent/target/sentinel-agent deploy/downloads/agent/linux/$ARCH/
+cp agent-native/bin/sentinel-native deploy/downloads/agent-native/linux/$ARCH/
+cp install/install.sh install/monitoring-agent.service install/monitoring-agent-collector.service install/monitoring-agent.yml.template deploy/downloads/install/
+```
+
+Since `deploy/downloads` is a bind mount, files added on the host show up in the running
+container immediately — no restart needed. The native-image build **has not been verified
+to succeed** (see the caveats in `agent/pom.xml`'s `native` profile and
+`agent/src/main/resources/META-INF/native-image/`); if it fails on a reflection error, the
+standard fix is running the agent once as a plain JVM app with
+`-agentlib:native-image-agent=config-output-dir=agent/src/main/resources/META-INF/native-image/com.monitoring/agent`
+to record the actual reflective calls, then retrying the native build with that generated
+config merged in.
+
 Visit `https://<your-domain>`, add a server from the dashboard, and run the install
 command it gives you on a second VPS to exercise the full push flow end-to-end.
 

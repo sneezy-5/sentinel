@@ -1,7 +1,8 @@
-name: agent-native-build
+name: agent-jvm-native-build
 
-# Builds the agent's GraalVM native binary for amd64 and arm64 (the vast majority of VPS
-# instances, plus the increasingly common ARM instances at various hosting providers).
+# Builds a GraalVM native binary for the Java `agent` module (amd64 and arm64) - not to be
+# confused with `agent-native-c-build.yml`, which builds the separate C `agent-native`
+# module. Two different binaries, both needed by install.sh (architecture doc, section 5.1).
 #
 # native-image doesn't cross-compile (see agent/Dockerfile.native): each arch is therefore
 # built on a runner of that same arch, not through a single job that varies a parameter.

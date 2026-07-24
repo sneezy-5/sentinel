@@ -39,6 +39,11 @@ services:
       # ddl-auto stays "update" here too: the hypertable conversion above only runs once,
       # against tables Hibernate itself creates on first boot - see init-hypertables.sql.
       SENTINEL_PUBLIC_URL: https://${SENTINEL_DOMAIN:?set SENTINEL_DOMAIN in deploy/.env}
+    volumes:
+      # Agent binaries + install.sh (see WebConfig, serves /downloads/** and /install.sh
+      # from here). Populate this directory yourself - see the "Deploying to production"
+      # section of the root README for what goes where and how to build it.
+      - ./downloads:/opt/sentinel/downloads:ro
     depends_on:
       timescaledb:
         condition: service_healthy

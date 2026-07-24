@@ -25,3 +25,6 @@ sentinel:
   # doc, section 5.1) - override in a prod profile (application-prod.yaml or the
   # SENTINEL_PUBLIC_URL env var), this placeholder only works locally.
   public-url: "http://localhost:8080"
+  # external directory serving agent binaries + install script (see WebConfig) - mounted
+  # as a volume in deploy/docker-compose.yml, doesn't need to exist for the app to start.
+  downloads-dir: "/opt/sentinel/downloads"
