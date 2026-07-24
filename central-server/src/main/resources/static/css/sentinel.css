@@ -174,6 +174,31 @@ main {
 	font-size: 0.95rem;
 }
 
+.card-header-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.card-header-row .header-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-weight: 400;
+}
+
+.metrics-updated {
+	color: var(--text-muted);
+	font-size: 0.78rem;
+}
+
+.btn-small {
+	padding: 4px 12px;
+	font-size: 0.8rem;
+	border-radius: 6px;
+}
+
 table {
 	width: 100%;
 	border-collapse: collapse;

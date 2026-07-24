@@ -13,20 +13,26 @@
 		</div>
 		<p class="subtitle" th:text="${service.type}">type</p>
 
-		<div class="card">
-			<div class="card-header">Metrics</div>
+		<div class="card" id="service-metrics" th:attr="data-service-id=${service.id}">
+			<div class="card-header card-header-row">
+				<span>Metrics</span>
+				<span class="header-actions">
+					<span class="metrics-updated"></span>
+					<button type="button" class="btn btn-secondary btn-small refresh-button">Refresh</button>
+				</span>
+			</div>
 			<dl class="info-grid">
 				<div>
 					<dt>CPU</dt>
-					<dd th:text="${metric != null} ? ${#numbers.formatDecimal(metric.cpuPercent, 1, 1, 'POINT')} + '%' : '—'">-</dd>
+					<dd data-metric="cpu" th:text="${metric != null} ? ${#numbers.formatDecimal(metric.cpuPercent, 1, 1, 'POINT')} + '%' : '—'">-</dd>
 				</div>
 				<div>
 					<dt>Memory</dt>
-					<dd th:text="${metric != null} ? ${metric.memMb} + ' MB' : '—'">-</dd>
+					<dd data-metric="mem" th:text="${metric != null} ? ${metric.memMb} + ' MB' : '—'">-</dd>
 				</div>
 				<div>
 					<dt>Disk</dt>
-					<dd th:text="${metric != null} ? ${metric.diskMb} + ' MB' : '—'">-</dd>
+					<dd data-metric="disk" th:text="${metric != null} ? ${metric.diskMb} + ' MB' : '—'">-</dd>
 				</div>
 			</dl>
 		</div>
@@ -58,5 +64,7 @@
 			</div>
 		</div>
 	</main>
+
+	<script src="/js/service-metrics.js"></script>
 </body>
 </html>
