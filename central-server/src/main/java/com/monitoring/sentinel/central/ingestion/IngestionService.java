@@ -109,6 +109,7 @@ public class IngestionService {
 		serviceMetric.setTimestamp(timestamp);
 		serviceMetric.setCpuPercent(servicePayload.cpuPercent());
 		serviceMetric.setMemMb(servicePayload.memMb());
+		serviceMetric.setDiskMb(servicePayload.diskMb());
 		serviceMetricRepository.save(ServiceMetricEntity.fromModel(serviceMetric));
 	}
 

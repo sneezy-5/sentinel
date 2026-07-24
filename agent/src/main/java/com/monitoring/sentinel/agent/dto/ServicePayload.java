@@ -9,5 +9,6 @@ public record ServicePayload(
 		String status,
 		double cpuPercent,
 		long memMb,
+		long diskMb,
 		Map<String, String> metadata) {
 }

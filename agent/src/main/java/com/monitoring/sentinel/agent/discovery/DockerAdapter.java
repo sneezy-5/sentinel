@@ -16,7 +16,8 @@ import java.util.regex.Pattern;
 
 /**
  * Detected via /var/run/docker.sock (architecture doc, section 3.2). The most structured
- * case: per-container stats via /containers/{id}/stats (CPU, RAM, network, I/O).
+ * case: per-container stats via /containers/{id}/stats (CPU, RAM, network, I/O), plus
+ * writable-layer disk size via /containers/json?size=true.
  *
  * Talks to the Docker Engine API directly over the unix socket (see UnixSocketHttpClient) -
  * no Docker SDK dependency, matching the "agent stays lightweight" goal. Uses unversioned
@@ -44,7 +45,9 @@ public class DockerAdapter implements ServiceAdapter {
 	@Override
 	public List<DiscoveredService> discover() {
 		try {
-			JsonNode containers = requestJson("/containers/json");
+			// size=true adds SizeRw/SizeRootFs to each entry - avoids a second per-container
+			// call just to get disk usage.
+			JsonNode containers = requestJson("/containers/json?size=true");
 			List<DiscoveredService> services = new ArrayList<>();
 			for (JsonNode container : containers) {
 				try {
@@ -71,6 +74,9 @@ public class DockerAdapter implements ServiceAdapter {
 		JsonNode stats = requestJson("/containers/" + containerId + "/stats?stream=false");
 		double cpuPercent = computeCpuPercent(stats);
 		long memMb = computeMemMb(stats);
+		// SizeRw: the container's own writable layer, not the shared read-only image layers
+		// underneath it - matches what `docker ps --size` shows as SIZE (not "virtual size").
+		long diskMb = container.path("SizeRw").asLong(0) / (1024 * 1024);
 
 		Map<String, String> metadata = new LinkedHashMap<>();
 		metadata.put("image", image);
@@ -81,7 +87,7 @@ public class DockerAdapter implements ServiceAdapter {
 		}
 
 		return new DiscoveredService(
-				"docker:" + stableName, rawName, "docker", "running", cpuPercent, memMb, metadata);
+				"docker:" + stableName, rawName, "docker", "running", cpuPercent, memMb, diskMb, metadata);
 	}
 
 	/** Docker's own CPU% formula (as used by `docker stats`): delta of container CPU usage

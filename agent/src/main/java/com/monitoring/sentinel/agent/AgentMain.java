@@ -90,7 +90,7 @@ public final class AgentMain {
 				new NetworkUsagePayload(stats.rxBytes(), stats.txBytes()));
 
 		List<ServicePayload> servicePayloads = services.stream()
-				.map(s -> new ServicePayload(s.id(), s.name(), s.type(), s.status(), s.cpuPercent(), s.memMb(), s.metadata()))
+				.map(s -> new ServicePayload(s.id(), s.name(), s.type(), s.status(), s.cpuPercent(), s.memMb(), s.diskMb(), s.metadata()))
 				.collect(Collectors.toList());
 
 		return new MetricsPayload(Instant.now(), systemPayload, servicePayloads);

@@ -21,6 +21,7 @@ public class ServiceMetricEntity {
 	private Instant timestamp;
 	private double cpuPercent;
 	private long memMb;
+	private long diskMb;
 
 	protected ServiceMetricEntity() {
 	}
@@ -31,6 +32,7 @@ public class ServiceMetricEntity {
 		entity.timestamp = metric.getTimestamp();
 		entity.cpuPercent = metric.getCpuPercent();
 		entity.memMb = metric.getMemMb();
+		entity.diskMb = metric.getDiskMb();
 		return entity;
 	}
 
@@ -40,6 +42,7 @@ public class ServiceMetricEntity {
 		metric.setTimestamp(timestamp);
 		metric.setCpuPercent(cpuPercent);
 		metric.setMemMb(memMb);
+		metric.setDiskMb(diskMb);
 		return metric;
 	}
 
@@ -57,5 +60,9 @@ public class ServiceMetricEntity {
 
 	public long getMemMb() {
 		return memMb;
+	}
+
+	public long getDiskMb() {
+		return diskMb;
 	}
 }
