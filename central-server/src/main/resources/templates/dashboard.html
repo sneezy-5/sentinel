@@ -10,6 +10,21 @@
 		</div>
 
 		<div class="card">
+			<div class="card-header">Add a server</div>
+			<form id="add-server-form" class="form-row">
+				<input type="text" name="name" placeholder="Name (e.g. web-01)" required autocomplete="off"/>
+				<input type="text" name="hostname" placeholder="Hostname (e.g. web-01.example.com)" required autocomplete="off"/>
+				<button type="submit" class="btn">Add server</button>
+			</form>
+			<p id="add-server-error" class="error-text" hidden></p>
+			<div id="add-server-result" class="result-box" hidden>
+				<p class="warning">Copy this now — the token won't be shown again.</p>
+				<pre id="install-command"></pre>
+				<button id="add-server-done" class="btn btn-secondary" type="button">Done</button>
+			</div>
+		</div>
+
+		<div class="card">
 			<table th:if="${not #lists.isEmpty(servers)}">
 				<thead>
 					<tr>
@@ -31,9 +46,11 @@
 				</tbody>
 			</table>
 			<div class="empty-state" th:if="${#lists.isEmpty(servers)}">
-				No server yet. Add one from the dashboard to get its install command.
+				No server yet. Add one above to get its install command.
 			</div>
 		</div>
 	</main>
+
+	<script src="/js/dashboard.js"></script>
 </body>
 </html>

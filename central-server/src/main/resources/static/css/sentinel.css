@@ -239,3 +239,79 @@ tbody tr:hover td {
 	font-size: 1rem;
 	font-weight: 600;
 }
+
+.form-row {
+	display: flex;
+	gap: 12px;
+	padding: 20px;
+	flex-wrap: wrap;
+}
+
+.form-row input[type="text"] {
+	flex: 1 1 200px;
+	padding: 9px 12px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	background: var(--bg);
+	color: var(--text);
+	font-size: 0.92rem;
+	font-family: inherit;
+}
+
+.form-row input[type="text"]:focus {
+	outline: 2px solid var(--accent);
+	outline-offset: -1px;
+}
+
+.btn {
+	padding: 9px 16px;
+	border: none;
+	border-radius: 8px;
+	background: var(--accent);
+	color: #fff;
+	font-weight: 600;
+	font-size: 0.9rem;
+	cursor: pointer;
+	font-family: inherit;
+}
+
+.btn:hover {
+	filter: brightness(1.08);
+}
+
+.btn-secondary {
+	background: transparent;
+	color: var(--text);
+	border: 1px solid var(--border);
+}
+
+.result-box {
+	padding: 20px;
+	border-top: 1px solid var(--border);
+}
+
+.result-box .warning {
+	color: var(--down);
+	font-weight: 600;
+	margin: 0 0 12px;
+}
+
+.result-box pre {
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 14px 16px;
+	overflow-x: auto;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.85rem;
+	white-space: pre-wrap;
+	word-break: break-all;
+	margin: 0 0 14px;
+}
+
+.error-text {
+	color: var(--down);
+	font-size: 0.88rem;
+	padding: 0 20px 16px;
+	margin: 0;
+}
