@@ -7,7 +7,7 @@
 # Already running nginx/another reverse proxy on 80/443 on this host? Don't bring up
 # `caddy` at all - it'll fail to bind those ports. Instead:
 #   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d timescaledb central-server
-# central-server is bound to 127.0.0.1:8080 (see below), so point your existing reverse
+# central-server is bound to 127.0.0.1:8090 (see below), so point your existing reverse
 # proxy at that - see deploy/nginx-central-server.conf.example for a ready-to-adapt vhost.
 #
 # If the image pull fails with "denied"/"unauthorized": the GHCR package is probably still
@@ -55,9 +55,10 @@ services:
       SENTINEL_PUBLIC_URL: https://${SENTINEL_DOMAIN:?set SENTINEL_DOMAIN in deploy/.env}
     ports:
       # Bound to loopback only, not the public interface: real traffic must go through
-      # Caddy (TLS). This just lets you reach it via an SSH tunnel for debugging, or
-      # locally if you're running the stack on your own machine.
-      - "127.0.0.1:8080:8080"
+      # Caddy or an existing reverse proxy (TLS). Host-side port is 8090, not 8080 - on a
+      # shared server 8080 is a very common port for other things to already be using
+      # (found the hard way: pick whatever's actually free on yours with `ss -tlnp`).
+      - "127.0.0.1:8090:8080"
     volumes:
       # Optional: only needed if you want to self-host the agent binaries instead of the
       # default (GitHub Releases, see install.sh) - e.g. monitored servers without
