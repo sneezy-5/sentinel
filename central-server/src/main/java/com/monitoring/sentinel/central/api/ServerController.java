@@ -1,7 +1,6 @@
 package com.monitoring.sentinel.central.api;
 
 import com.monitoring.sentinel.central.persistence.entity.ServerEntity;
-import com.monitoring.sentinel.central.persistence.entity.ServiceEntity;
 import com.monitoring.sentinel.central.persistence.repository.LogEntryRepository;
 import com.monitoring.sentinel.central.persistence.repository.LogEventRepository;
 import com.monitoring.sentinel.central.persistence.repository.ServerRepository;
@@ -83,11 +82,16 @@ public class ServerController {
 		// are plain string columns, not @ManyToOne relationships) - deleting just the server
 		// row would leave system_metrics/services/service_metrics/logs orphaned forever
 		// (long-retention hypertables like log_events would never age them out).
-		for (ServiceEntity service : serviceRepository.findByServerId(serverId)) {
-			serviceMetricRepository.deleteByServiceId(service.getId());
-			logEntryRepository.deleteByServiceId(service.getId());
-			logEventRepository.deleteByServiceId(service.getId());
-		}
+		//
+		// Each of these is a single bulk SQL DELETE (see the repository Javadoc) - this used
+		// to loop over every service and delete its metrics/logs one row at a time via
+		// Spring Data's default derived-delete behavior, which timed out (HTTP 504) once a
+		// server had accumulated real history. The service-scoped deletes must run before
+		// serviceRepository.deleteByServerId, since they resolve their rows via a subquery
+		// over the services table.
+		serviceMetricRepository.deleteByServerId(serverId);
+		logEntryRepository.deleteByServerId(serverId);
+		logEventRepository.deleteByServerId(serverId);
 		serviceRepository.deleteByServerId(serverId);
 		systemMetricRepository.deleteByServerId(serverId);
 		serverRepository.deleteById(serverId);
