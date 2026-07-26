@@ -35,16 +35,37 @@ public class Pm2Adapter implements ServiceAdapter {
 	private static final long JLIST_TIMEOUT_SECONDS = 5;
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
+	private boolean loggedUnavailable = false;
 
+	// isAvailable() only checks for *some* .pm2 directory (cheap, and logs at most once per
+	// agent run when it finds nothing - most servers genuinely have no PM2 at all and
+	// shouldn't get a log line every cycle for that, but total silence made this adapter
+	// impossible to debug remotely: a real PM2 install this can't reach for any reason - home
+	// directory in a non-standard place, $HOME resolving unexpectedly for whichever user the
+	// agent runs as, anything - looked identical in the logs to "PM2 isn't installed".
+	// discover() does the stricter check (a *live* daemon's pm2.pid) and logs every cycle
+	// when that fails despite a .pm2 directory existing, matching DockerAdapter's tiering:
+	// silent if not applicable to this server, loud if it looks like it should work but
+	// doesn't.
 	@Override
 	public boolean isAvailable() {
-		return findPm2Home() != null;
+		boolean available = anyPm2DirectoryExists();
+		if (!available && !loggedUnavailable) {
+			loggedUnavailable = true;
+			System.err.println("Pm2Adapter: no .pm2 directory found under " + System.getProperty("user.home")
+					+ " or any /home/* account - not detecting PM2 on this server. (Logged once per agent run.)");
+		}
+		return available;
 	}
 
 	@Override
 	public List<DiscoveredService> discover() {
-		Path pm2Home = findPm2Home();
+		Path pm2Home = findLivePm2Home();
 		if (pm2Home == null) {
+			System.err.println("Pm2Adapter: found a .pm2 directory but no live daemon (<home>/.pm2/pm2.pid) under "
+					+ System.getProperty("user.home") + " or any /home/* account - is PM2 actually running, and if "
+					+ "so, can the user this agent runs as (see systemd unit's User=) traverse into the PM2 "
+					+ "process owner's home directory?");
 			return List.of();
 		}
 		try {
@@ -55,7 +76,21 @@ public class Pm2Adapter implements ServiceAdapter {
 		}
 	}
 
-	private Path findPm2Home() {
+	private boolean anyPm2DirectoryExists() {
+		if (Files.isDirectory(Path.of(System.getProperty("user.home"), ".pm2"))) {
+			return true;
+		}
+		if (!Files.isDirectory(HOME_DIR)) {
+			return false;
+		}
+		try (var entries = Files.list(HOME_DIR)) {
+			return entries.anyMatch(dir -> Files.isDirectory(dir.resolve(".pm2")));
+		} catch (IOException e) {
+			return false;
+		}
+	}
+
+	private Path findLivePm2Home() {
 		Path ownHome = Path.of(System.getProperty("user.home"), ".pm2");
 		if (Files.exists(ownHome.resolve("pm2.pid"))) {
 			return ownHome;
