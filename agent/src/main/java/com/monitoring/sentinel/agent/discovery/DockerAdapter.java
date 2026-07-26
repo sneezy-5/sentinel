@@ -33,11 +33,10 @@ import java.util.regex.Pattern;
  * formula matches Docker's own documented calculation and the JSON field names match the
  * documented Engine API schema, but this needs real verification before being trusted.
  * Swarm service detection (com.docker.swarm.service.name label) is untested for the same
- * reason. Log fetching only handles the non-TTY case (containers started without `-t`,
- * i.e. the vast majority run via `docker run -d` or compose): Docker multiplexes
- * stdout/stderr into framed chunks in that case, but sends plain unframed text for
- * TTY-allocated containers - this doesn't detect or handle that second case, logs from a
- * TTY container would come through corrupted.
+ * reason. Log framing depends on whether the container has a TTY (containers started with
+ * `-t` get plain unframed text, everything else gets the multiplexed 8-byte-header framing)
+ * - fetchLogs checks Config.Tty via the inspect endpoint and picks the right parsing, since
+ * treating a TTY container's raw text as framed data silently drops/garbles lines.
  */
 public class DockerAdapter implements ServiceAdapter, LogSource {
 
@@ -87,9 +86,12 @@ public class DockerAdapter implements ServiceAdapter, LogSource {
 		// underneath it - matches what `docker ps --size` shows as SIZE (not "virtual size").
 		long diskMb = container.path("SizeRw").asLong(0) / (1024 * 1024);
 
+		String shortId = containerId.substring(0, Math.min(12, containerId.length()));
 		Map<String, String> metadata = new LinkedHashMap<>();
 		metadata.put("image", image);
-		metadata.put("container_id", containerId.substring(0, Math.min(12, containerId.length())));
+		metadata.put("container_id", shortId);
+		// Generic key AgentMain reads for any LogSource (see KubernetesAdapter for the "namespace/pod/container" form).
+		metadata.put("log_native_id", shortId);
 		String swarmService = container.path("Labels").path("com.docker.swarm.service.name").asText(null);
 		if (swarmService != null) {
 			metadata.put("swarm_service", swarmService);
@@ -142,7 +144,7 @@ public class DockerAdapter implements ServiceAdapter, LogSource {
 	private static final Duration FIRST_FETCH_LOOKBACK = Duration.ofMinutes(5);
 
 	/**
-	 * nativeId is the container id (short form, from metadata "container_id" - Docker
+	 * nativeId is the container id (short form, from metadata "log_native_id" - Docker
 	 * resolves short ids fine). since=null means "no cursor yet" - the caller's cursor
 	 * then takes over from here.
 	 */
@@ -152,11 +154,18 @@ public class DockerAdapter implements ServiceAdapter, LogSource {
 		String query = "?stdout=true&stderr=true&timestamps=true&since=" + effectiveSince.getEpochSecond();
 		try {
 			byte[] raw = UnixSocketHttpClient.getBytes(DOCKER_SOCKET, "/containers/" + nativeId + "/logs" + query);
-			return demux(raw);
+			// TTY containers get plain unframed text; everything else gets the multiplexed
+			// framing demux() expects - picking the wrong one garbles/drops lines (see class doc).
+			return isTtyAllocated(nativeId) ? parseLines(new String(raw, StandardCharsets.UTF_8)) : demux(raw);
 		} catch (IOException | RuntimeException e) {
 			System.err.println("DockerAdapter: fetching logs for " + nativeId + " failed: " + e.getMessage());
 			return List.of();
 		}
+	}
+
+	private boolean isTtyAllocated(String containerId) throws IOException {
+		JsonNode inspect = requestJson("/containers/" + containerId + "/json");
+		return inspect.path("Config").path("Tty").asBoolean(false);
 	}
 
 	/** Docker's log stream framing (non-TTY only, see class doc): each frame is an 8-byte
@@ -175,12 +184,21 @@ public class DockerAdapter implements ServiceAdapter, LogSource {
 				break;
 			}
 			String payload = new String(raw, payloadStart, payloadEnd - payloadStart, StandardCharsets.UTF_8);
-			for (String line : payload.split("\n")) {
-				if (!line.isBlank()) {
-					lines.add(parseLine(line));
-				}
-			}
+			lines.addAll(parseLines(payload));
 			pos = payloadEnd;
+		}
+		return lines;
+	}
+
+	/** Splits a block of "<timestamp> <message>\n" lines into LogLines, skipping blanks -
+	 * shared by demux() (per-frame payload) and the TTY path (whole raw response is one block).
+	 * Package-private for direct unit testing. */
+	List<LogLine> parseLines(String text) {
+		List<LogLine> lines = new ArrayList<>();
+		for (String line : text.split("\n")) {
+			if (!line.isBlank()) {
+				lines.add(parseLine(line));
+			}
 		}
 		return lines;
 	}

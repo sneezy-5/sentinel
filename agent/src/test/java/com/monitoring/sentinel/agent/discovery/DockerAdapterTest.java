@@ -83,6 +83,18 @@ class DockerAdapterTest {
 		assertTrue(adapter.demux(new byte[0]).isEmpty());
 	}
 
+	@Test
+	void parseLinesHandlesTtyContainersUnframedText() {
+		String raw = "2026-07-24T12:00:00.000000000Z first\n2026-07-24T12:00:01.000000000Z ERROR: second\n";
+
+		List<LogSource.LogLine> lines = adapter.parseLines(raw);
+
+		assertEquals(2, lines.size());
+		assertEquals("first", lines.get(0).message());
+		assertEquals("ERROR: second", lines.get(1).message());
+		assertEquals("error", lines.get(1).level());
+	}
+
 	/** Builds one Docker log stream frame: 1-byte stream type, 3 zero bytes, 4-byte
 	 * big-endian length, then the payload - matching the format documented in DockerAdapter. */
 	private byte[] frame(int streamType, String payload) {

@@ -104,7 +104,7 @@ public final class AgentMain {
 
 	private static void pushLogsForService(
 			LogSource logSource, DiscoveredService service, PushClient pushClient, Map<String, Instant> logCursors) {
-		String nativeId = service.metadata() != null ? service.metadata().get("container_id") : null;
+		String nativeId = service.metadata() != null ? service.metadata().get("log_native_id") : null;
 		if (nativeId == null) {
 			return;
 		}
