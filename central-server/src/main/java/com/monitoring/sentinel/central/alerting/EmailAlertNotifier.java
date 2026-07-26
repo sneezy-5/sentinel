@@ -25,9 +25,11 @@ public class EmailAlertNotifier implements AlertNotifier {
 	private static final Logger log = LoggerFactory.getLogger(EmailAlertNotifier.class);
 
 	private final AlertSettingsRepository alertSettingsRepository;
+	private final AlertMessageFormatter formatter;
 
-	public EmailAlertNotifier(AlertSettingsRepository alertSettingsRepository) {
+	public EmailAlertNotifier(AlertSettingsRepository alertSettingsRepository, AlertMessageFormatter formatter) {
 		this.alertSettingsRepository = alertSettingsRepository;
+		this.formatter = formatter;
 	}
 
 	@Override
@@ -48,9 +50,8 @@ public class EmailAlertNotifier implements AlertNotifier {
 			SimpleMailMessage message = new SimpleMailMessage();
 			message.setFrom(s.getFromAddress());
 			message.setTo(s.getToAddress());
-			message.setSubject("[Sentinel] " + rule.getLevel() + " - " + rule.getTargetMetric() + " threshold exceeded");
-			message.setText("Rule " + rule.getId() + ": " + rule.getTargetMetric() + " = " + actualValue
-					+ " (threshold " + rule.getThreshold() + ")");
+			message.setSubject(formatter.subject(rule));
+			message.setText(formatter.body(rule, actualValue));
 			sender.send(message);
 		} catch (RuntimeException e) {
 			// A failed email must never break threshold evaluation for the next rule/cycle.

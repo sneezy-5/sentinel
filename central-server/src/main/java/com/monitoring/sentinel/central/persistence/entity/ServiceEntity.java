@@ -70,6 +70,10 @@ public class ServiceEntity {
 		return serverId;
 	}
 
+	public String getName() {
+		return name;
+	}
+
 	public ServiceType getType() {
 		return type;
 	}
