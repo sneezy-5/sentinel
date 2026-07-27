@@ -48,6 +48,18 @@
     "allDeclaredConstructors": true
   },
   {
+    "name": "com.monitoring.sentinel.agent.dto.TopProcessPayload",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.monitoring.sentinel.agent.dto.HeaviestFilePayload",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true
+  },
+  {
     "name": "com.monitoring.sentinel.agent.collector.SystemStats",
     "allDeclaredFields": true,
     "allDeclaredMethods": true,
@@ -55,6 +67,12 @@
   },
   {
     "name": "com.monitoring.sentinel.agent.collector.SystemStats$Disk",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "allDeclaredConstructors": true
+  },
+  {
+    "name": "com.monitoring.sentinel.agent.collector.SystemStats$TopProcess",
     "allDeclaredFields": true,
     "allDeclaredMethods": true,
     "allDeclaredConstructors": true
