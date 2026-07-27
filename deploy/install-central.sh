@@ -82,6 +82,13 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD}
 EOF
 chmod 600 .env
 
+echo "==> Pulling latest images"
+# Without an explicit pull, "up -d" only fetches an image if that tag isn't already cached
+# locally - re-running this script (e.g. to pick up a newer release) would otherwise keep
+# reusing whatever :latest happened to be cached from an earlier run, silently never
+# updating central-server even though a newer image exists on GHCR.
+docker compose --env-file .env pull timescaledb central-server
+
 echo "==> Starting timescaledb + central-server"
 docker compose --env-file .env up -d timescaledb central-server
 
