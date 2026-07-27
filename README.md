@@ -122,9 +122,21 @@ curl -sSL https://raw.githubusercontent.com/sneezy-5/sentinel/main/deploy/instal
 Add `--no-caddy` if this host already runs nginx/another reverse proxy on 80/443 (see
 `deploy/nginx-central-server.conf.example`, downloaded alongside the rest). The script
 prints a generated admin password once at the end — save it immediately, change it from
-the Settings page after logging in. This has **not been run end-to-end on a fresh box**
-while writing it; the individual steps have been exercised manually earlier in this
-project's history, but not through this exact script.
+the Settings page after logging in.
+
+**Run end-to-end on a real VPS** - surfaced one real bug, since fixed: the script used to
+wait a fixed 15s before converting the tables into hypertables, which isn't always enough
+time for Hibernate to finish creating them (`ddl-auto=update` on a slower box can take
+longer) - the hypertable conversion failed with "relation ... does not exist" on every
+statement. It now polls for `system_metrics` to actually exist (up to 60s) instead of
+guessing a delay. If it somehow still times out on a very slow box, re-run just that step
+once `docker compose --env-file .env logs central-server` shows "Started
+CentralServerApplication":
+
+```bash
+cd /opt/sentinel
+docker compose --env-file .env exec -T timescaledb psql -U sentinel -d sentinel -f - < init-hypertables.sql
+```
 
 ### Alternative: clone first
 
@@ -169,14 +181,21 @@ them yet — see the "Status" section below.
 
 ### Releasing the agent binaries
 
-Push a `v*` tag (e.g. `v0.1.0`) to trigger all three release workflows at once:
-`agent-jvm-native-build.yml` and `agent-native-c-build.yml` build the two agent binaries
-(amd64 + arm64 each) and upload them as assets on a GitHub Release matching that tag;
-`central-server-release.yml` builds and pushes the Docker image to GHCR. Nothing needs to
-be built or placed manually on the server — `install.sh` pulls
+Push a `v*` tag (e.g. `v0.1.0`) to trigger both release workflows at once:
+`agent-release.yml` builds all four agent binaries (the Java module's GraalVM native image
++ the C `agent-native` module, amd64 and arm64 each) and uploads them as assets on a GitHub
+Release matching that tag; `central-server-release.yml` builds and pushes the Docker image
+to GHCR. Nothing needs to be built or placed manually on the server — `install.sh` pulls
 `sentinel-agent-linux-<arch>` and `sentinel-native-linux-<arch>` straight from
 `github.com/<repo>/releases/latest/download/...`, which always resolves to the most recent
 tag with no auth required.
+
+`agent-release.yml`'s four jobs (`agent-amd64`, `agent-arm64`, `native-amd64`,
+`native-arm64` - the C build is the last two, not a separate workflow) run strictly
+sequentially via `needs:`, not in parallel (see the comment at the top of that file for
+why) - the C build only starts once both Java native-image jobs have finished, which can
+take a while, so it's normal for it to still show as queued/not-yet-run while the Java jobs
+are in progress rather than appearing as its own workflow in the Actions list.
 
 If a monitored server can't reach github.com, `deploy/downloads/` is a self-hosted fallback
 (`install.sh --download-base=https://<central>/downloads`) — see `deploy/downloads/README.md`.

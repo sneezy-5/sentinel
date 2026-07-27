@@ -93,7 +93,29 @@ else
 fi
 
 echo "==> Waiting for central-server to create its schema..."
-sleep 15
+# A fixed sleep here used to cause init-hypertables.sql to run against a database that
+# didn't have the app's tables yet ("relation does not exist" on every statement) -
+# Hibernate's ddl-auto=update can easily take longer than a few seconds on a slower VPS.
+# Poll for the actual signal (does system_metrics exist yet) instead of guessing a delay.
+SCHEMA_READY=false
+for _ in $(seq 1 30); do
+  if docker compose --env-file .env exec -T timescaledb \
+      psql -U sentinel -d sentinel -tAc "SELECT to_regclass('public.system_metrics') IS NOT NULL" 2>/dev/null \
+      | grep -q "^t$"; then
+    SCHEMA_READY=true
+    break
+  fi
+  sleep 2
+done
+
+if [[ "$SCHEMA_READY" != true ]]; then
+  echo "central-server hasn't created its schema after 60s - check its logs for a startup" >&2
+  echo "error (docker compose --env-file .env logs central-server), fix that, then re-run" >&2
+  echo "just the conversion once the tables exist:" >&2
+  echo "  cd ${INSTALL_DIR} && docker compose --env-file .env exec -T timescaledb psql -U sentinel -d sentinel -f - < init-hypertables.sql" >&2
+  exit 1
+fi
+
 docker compose --env-file .env exec -T timescaledb psql -U sentinel -d sentinel -f - < init-hypertables.sql \
   || echo "Hypertable conversion failed or partially applied - see the root README's Deploying section to retry/debug."
 
