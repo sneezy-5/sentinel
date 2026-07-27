@@ -1,6 +1,7 @@
 package com.monitoring.sentinel.central.api;
 
 import com.monitoring.sentinel.central.persistence.entity.ServerEntity;
+import com.monitoring.sentinel.central.persistence.repository.AlertRuleRepository;
 import com.monitoring.sentinel.central.persistence.repository.LogEntryRepository;
 import com.monitoring.sentinel.central.persistence.repository.LogEventRepository;
 import com.monitoring.sentinel.central.persistence.repository.ServerRepository;
@@ -36,6 +37,7 @@ public class ServerController {
 	private final ServiceMetricRepository serviceMetricRepository;
 	private final LogEntryRepository logEntryRepository;
 	private final LogEventRepository logEventRepository;
+	private final AlertRuleRepository alertRuleRepository;
 	private final TokenService tokenService;
 	private final String publicUrl;
 
@@ -46,6 +48,7 @@ public class ServerController {
 			ServiceMetricRepository serviceMetricRepository,
 			LogEntryRepository logEntryRepository,
 			LogEventRepository logEventRepository,
+			AlertRuleRepository alertRuleRepository,
 			TokenService tokenService,
 			@Value("${sentinel.public-url:http://localhost:8080}") String publicUrl) {
 		this.serverRepository = serverRepository;
@@ -54,6 +57,7 @@ public class ServerController {
 		this.serviceMetricRepository = serviceMetricRepository;
 		this.logEntryRepository = logEntryRepository;
 		this.logEventRepository = logEventRepository;
+		this.alertRuleRepository = alertRuleRepository;
 		this.tokenService = tokenService;
 		this.publicUrl = publicUrl;
 	}
@@ -94,6 +98,10 @@ public class ServerController {
 		logEventRepository.deleteByServerId(serverId);
 		serviceRepository.deleteByServerId(serverId);
 		systemMetricRepository.deleteByServerId(serverId);
+		// Alert rules reference serverId directly (even service-level ones, see
+		// AlertRuleController) - without this they'd keep evaluating against a server that no
+		// longer pushes anything, dead rows nobody can see or clean up from the UI.
+		alertRuleRepository.deleteByServerId(serverId);
 		serverRepository.deleteById(serverId);
 		return ResponseEntity.noContent().build();
 	}
