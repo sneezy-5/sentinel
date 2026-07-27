@@ -4,6 +4,23 @@
 # Adapt and drop into /etc/nginx/sites-available/, symlink into sites-enabled/, then
 # get a cert for SENTINEL_DOMAIN however you normally do on this box (certbot, etc.) -
 # this example assumes one already exists at the paths below.
+#
+# Multiple vhosts on this nginx: Sentinel (NginxAdapter) scans nginx.conf/sites-enabled/
+# conf.d for every `access_log` directive it can find and tails each distinct file
+# SEPARATELY, one Sentinel service per file. That's the entire mechanism - there's no other
+# way it knows a vhost exists. Concretely:
+#
+#   - Give a vhost its OWN access_log line to get it tracked as its own service, with its
+#     own "Top endpoints" ranking and its own logs on the dashboard:
+#       access_log /var/log/nginx/<that-vhost>.access.log;
+#   - Any vhost WITHOUT its own access_log line (the default if you never set one - every
+#     vhost then falls back to the log configured at the http {} level) is invisible as a
+#     separate service - its requests land in the shared "nginx:main" catch-all instead,
+#     mixed in with every other un-configured vhost.
+#
+# So: one access_log line per vhost you actually want visibility into. Nothing
+# Sentinel-specific about the directive itself - standard nginx, works the same with or
+# without Sentinel watching.
 
 server {
     listen 80;

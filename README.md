@@ -187,6 +187,16 @@ dependency here), but `curl -I http://127.0.0.1:8090/` from the VPS itself shoul
 a real HTTP response (redirect to the login page), independent of nginx/DNS/certs being
 right yet.
 
+If this same nginx also fronts other sites/vhosts on this box: `NginxAdapter` scans
+nginx.conf/sites-enabled/conf.d for every `access_log` directive it finds and tails each
+distinct file as its own Sentinel service (its own "Top endpoints" ranking, its own logs on
+the dashboard) - that's the *only* way it knows a vhost exists. Concretely, **each vhost you
+want tracked separately needs its own `access_log /var/log/nginx/<name>.log;` line** in its
+`server {}` block (standard nginx, see the comment in `nginx-central-server.conf.example`
+for the full explanation). Any vhost still logging to the shared default file - the case if
+you never add that line - stays invisible as a separate service, its requests just mixed
+into the catch-all "nginx:main" service along with every other un-configured vhost.
+
 ### Alternative: clone first
 
 Useful if you want to read/edit the compose file before running it:

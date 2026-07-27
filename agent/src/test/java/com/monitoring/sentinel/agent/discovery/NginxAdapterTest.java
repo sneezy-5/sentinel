@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -131,7 +132,10 @@ class NginxAdapterTest {
 	}
 
 	@Test
-	void discoverReturnsASingleNginxService() {
+	void discoverReturnsJustTheMainServiceWhenNoVhostConfigExists() {
+		// The shared `adapter` points at a nonexistent nginx config (default real /etc/nginx
+		// paths, absent in the test sandbox) - discoverVhostLogPaths() finds nothing, so only
+		// the catch-all service is reported.
 		List<DiscoveredService> services = adapter.discover();
 
 		assertEquals(1, services.size());
@@ -140,9 +144,162 @@ class NginxAdapterTest {
 	}
 
 	@Test
-	void fromConfigTreatsBlankPathAsDisabled(@TempDir Path tempDir) {
+	void fromConfigTreatsBlankPathAsDisabled() {
 		NginxAdapter disabled = NginxAdapter.fromConfig("", "");
 
 		assertFalse(disabled.isAvailable());
+	}
+
+	@Test
+	void vhostServiceNameStripsLogExtensionAndAccessSuffix() {
+		assertEquals("onda-backend", adapter.vhostServiceName(Path.of("/var/log/nginx/onda-backend.access.log")));
+		assertEquals("waretrack", adapter.vhostServiceName(Path.of("/var/log/nginx/waretrack.log")));
+		assertEquals("django_stack", adapter.vhostServiceName(Path.of("/var/log/nginx/django_stack-access.log")));
+	}
+
+	@Test
+	void vhostServiceNameFallsBackRatherThanReturningBlank() {
+		assertEquals("access", adapter.vhostServiceName(Path.of("/var/log/nginx/access.log")));
+	}
+
+	@Test
+	void discoverVhostLogPathsFindsAccessLogDirectivesUnderSitesEnabled(@TempDir Path tempDir) throws IOException {
+		Path sitesEnabled = tempDir.resolve("sites-enabled");
+		Files.createDirectory(sitesEnabled);
+		Files.writeString(sitesEnabled.resolve("onda-backend.conf"), """
+				server {
+				    server_name onda-backend.example.com;
+				    access_log /var/log/nginx/onda-backend.access.log;
+				}
+				""", StandardCharsets.UTF_8);
+		Files.writeString(sitesEnabled.resolve("waretrack.conf"), """
+				server {
+				    server_name waretrack.example.com;
+				    access_log /var/log/nginx/waretrack.log;
+				}
+				""", StandardCharsets.UTF_8);
+
+		NginxAdapter withConfig = new NginxAdapter(Path.of("/var/log/nginx/access.log"),
+				Path.of("/var/log/nginx/error.log"), tempDir.resolve("nginx.conf"), List.of(sitesEnabled));
+
+		Set<Path> found = withConfig.discoverVhostLogPaths();
+
+		assertEquals(Set.of(Path.of("/var/log/nginx/onda-backend.access.log"), Path.of("/var/log/nginx/waretrack.log")),
+				found);
+	}
+
+	@Test
+	void discoverVhostLogPathsSkipsOffAndSyslogTargets(@TempDir Path tempDir) throws IOException {
+		Path sitesEnabled = tempDir.resolve("sites-enabled");
+		Files.createDirectory(sitesEnabled);
+		Files.writeString(sitesEnabled.resolve("site.conf"), """
+				server {
+				    access_log off;
+				}
+				server {
+				    access_log syslog:server=127.0.0.1:514 combined;
+				}
+				""", StandardCharsets.UTF_8);
+
+		NginxAdapter withConfig = new NginxAdapter(Path.of("/var/log/nginx/access.log"),
+				Path.of("/var/log/nginx/error.log"), tempDir.resolve("nginx.conf"), List.of(sitesEnabled));
+
+		assertTrue(withConfig.discoverVhostLogPaths().isEmpty());
+	}
+
+	@Test
+	void discoverVhostLogPathsExcludesTheConfiguredMainAccessLog(@TempDir Path tempDir) throws IOException {
+		Path sitesEnabled = tempDir.resolve("sites-enabled");
+		Files.createDirectory(sitesEnabled);
+		Files.writeString(sitesEnabled.resolve("sentinel.conf"), """
+				server {
+				    access_log /var/log/nginx/access.log;
+				}
+				""", StandardCharsets.UTF_8);
+
+		NginxAdapter withConfig = new NginxAdapter(Path.of("/var/log/nginx/access.log"),
+				Path.of("/var/log/nginx/error.log"), tempDir.resolve("nginx.conf"), List.of(sitesEnabled));
+
+		assertTrue(withConfig.discoverVhostLogPaths().isEmpty());
+	}
+
+	@Test
+	void discoverReportsAndTailsEachDiscoveredVhostLogSeparately(@TempDir Path tempDir) throws IOException {
+		Path mainAccess = tempDir.resolve("access.log");
+		Path mainError = tempDir.resolve("error.log");
+		Files.createFile(mainAccess);
+		Files.createFile(mainError);
+
+		Path sitesEnabled = tempDir.resolve("sites-enabled");
+		Files.createDirectory(sitesEnabled);
+		Path vhostLog = tempDir.resolve("onda-backend.access.log");
+		Files.createFile(vhostLog);
+		Files.writeString(sitesEnabled.resolve("onda-backend.conf"),
+				"server {\n    access_log " + vhostLog + ";\n}\n", StandardCharsets.UTF_8);
+
+		NginxAdapter withConfig = new NginxAdapter(mainAccess, mainError, tempDir.resolve("nginx.conf"), List.of(sitesEnabled));
+		withConfig.discover(); // first cycle: establishes tailing offsets for every file, empty backlog
+
+		Files.writeString(vhostLog,
+				"127.0.0.1 - - [10/Oct/2023:13:55:36 +0000] \"GET /api/foo HTTP/1.1\" 200 0 \"-\" \"-\"\n",
+				StandardCharsets.UTF_8);
+
+		List<DiscoveredService> services = withConfig.discover();
+
+		assertEquals(2, services.size());
+		assertEquals("nginx:main", services.get(0).id());
+		assertEquals("nginx:onda-backend", services.get(1).id());
+		assertEquals("onda-backend", services.get(1).name());
+
+		List<LogSource.LogLine> vhostLines = withConfig.fetchLogs("nginx:onda-backend", null);
+		assertEquals(1, vhostLines.size());
+		assertTrue(vhostLines.get(0).message().contains("/api/foo"));
+		assertTrue(withConfig.fetchLogs("nginx:main", null).isEmpty());
+	}
+
+	@Test
+	void knownVhostsKeepBeingReportedEvenWithoutNewTrafficThisCycle(@TempDir Path tempDir) throws IOException {
+		Path mainAccess = tempDir.resolve("access.log");
+		Path mainError = tempDir.resolve("error.log");
+		Files.createFile(mainAccess);
+		Files.createFile(mainError);
+
+		Path sitesEnabled = tempDir.resolve("sites-enabled");
+		Files.createDirectory(sitesEnabled);
+		Path vhostLog = tempDir.resolve("onda-backend.access.log");
+		Files.createFile(vhostLog);
+		Files.writeString(sitesEnabled.resolve("onda-backend.conf"),
+				"server {\n    access_log " + vhostLog + ";\n}\n", StandardCharsets.UTF_8);
+
+		NginxAdapter withConfig = new NginxAdapter(mainAccess, mainError, tempDir.resolve("nginx.conf"), List.of(sitesEnabled));
+		withConfig.discover();
+		withConfig.discover(); // no traffic on either cycle
+
+		List<DiscoveredService> services = withConfig.discover();
+
+		assertEquals(2, services.size());
+		assertEquals("nginx:onda-backend", services.get(1).id());
+	}
+
+	@Test
+	void errorLogLinesAlwaysGoToTheMainService(@TempDir Path tempDir) throws IOException {
+		Path access = tempDir.resolve("access.log");
+		Path error = tempDir.resolve("error.log");
+		Files.createFile(access);
+		Files.createFile(error);
+		NginxAdapter tailing = new NginxAdapter(access, error);
+		tailing.discover();
+
+		Files.writeString(error, "2023/10/10 13:55:36 [error] connect() failed\n", StandardCharsets.UTF_8);
+		tailing.discover();
+
+		List<LogSource.LogLine> mainLines = tailing.fetchLogs("nginx:main", null);
+		assertEquals(1, mainLines.size());
+		assertEquals("error", mainLines.get(0).level());
+	}
+
+	@Test
+	void fetchLogsReturnsEmptyForAnUnknownServiceId() {
+		assertTrue(adapter.fetchLogs("nginx:does-not-exist", null).isEmpty());
 	}
 }
