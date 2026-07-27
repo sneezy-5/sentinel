@@ -24,9 +24,17 @@ import java.util.regex.Pattern;
  * The agent normally runs as root (see the systemd unit), while PM2 is normally started
  * under an unprivileged user's account - its state (and what "pm2 jlist" needs to talk to)
  * lives under that user's $HOME/.pm2, not /root/.pm2. Rather than requiring the operator to
- * configure which user, this scans /home/* for a live daemon and points the "pm2" CLI at it
- * via the PM2_HOME env var - PM2's own supported way to target a specific instance, no
- * "sudo -u" or capability changes needed.
+ * configure which user, this scans /home/* for live daemons and points the "pm2" CLI at each
+ * one in turn via the PM2_HOME env var - PM2's own supported way to target a specific
+ * instance, no "sudo -u" or capability changes needed.
+ *
+ * Merges the process lists from every live daemon found (own home + each /home/* account),
+ * not just the first one: any account - root's own $HOME included - can have a pm2.pid from
+ * a daemon PM2 auto-started for some unrelated one-off "pm2 ..." invocation (that's normal
+ * PM2 behavior, not a sign anything is wrong), and that daemon legitimately manages zero
+ * processes. Stopping at the first pm2.pid found - which used to be root's own, checked
+ * first - meant a single stray `pm2 ls` run as root silently hid every real process running
+ * under an actual user's account from then on, with nothing about it looking like a failure.
  */
 public class Pm2Adapter implements ServiceAdapter {
 
@@ -60,20 +68,25 @@ public class Pm2Adapter implements ServiceAdapter {
 
 	@Override
 	public List<DiscoveredService> discover() {
-		Path pm2Home = findLivePm2Home();
-		if (pm2Home == null) {
+		List<Path> pm2Homes = findLivePm2Homes();
+		if (pm2Homes.isEmpty()) {
 			System.err.println("Pm2Adapter: found a .pm2 directory but no live daemon (<home>/.pm2/pm2.pid) under "
 					+ System.getProperty("user.home") + " or any /home/* account - is PM2 actually running, and if "
 					+ "so, can the user this agent runs as (see systemd unit's User=) traverse into the PM2 "
 					+ "process owner's home directory?");
 			return List.of();
 		}
-		try {
-			return parseJlist(runJlist(pm2Home));
-		} catch (IOException | RuntimeException e) {
-			System.err.println("Pm2Adapter: discovery failed: " + e.getMessage());
-			return List.of();
+		List<DiscoveredService> services = new ArrayList<>();
+		for (Path pm2Home : pm2Homes) {
+			try {
+				services.addAll(parseJlist(runJlist(pm2Home)));
+			} catch (IOException | RuntimeException e) {
+				// One daemon failing to answer shouldn't hide processes a different, healthy
+				// daemon (a different account) already reported this same cycle.
+				System.err.println("Pm2Adapter: discovery failed for PM2_HOME=" + pm2Home + ": " + e.getMessage());
+			}
 		}
+		return services;
 	}
 
 	private boolean anyPm2DirectoryExists() {
@@ -90,23 +103,24 @@ public class Pm2Adapter implements ServiceAdapter {
 		}
 	}
 
-	private Path findLivePm2Home() {
+	/** Every account with a live daemon (own home + each /home/* account) - not just the
+	 * first one found, see the class doc for why. */
+	private List<Path> findLivePm2Homes() {
+		List<Path> homes = new ArrayList<>();
 		Path ownHome = Path.of(System.getProperty("user.home"), ".pm2");
 		if (Files.exists(ownHome.resolve("pm2.pid"))) {
-			return ownHome;
+			homes.add(ownHome);
 		}
-		if (!Files.isDirectory(HOME_DIR)) {
-			return null;
+		if (Files.isDirectory(HOME_DIR)) {
+			try (var entries = Files.list(HOME_DIR)) {
+				entries.map(dir -> dir.resolve(".pm2"))
+						.filter(pm2Dir -> Files.exists(pm2Dir.resolve("pm2.pid")))
+						.forEach(homes::add);
+			} catch (IOException e) {
+				// Best effort - whatever was already found (e.g. own home) is still returned.
+			}
 		}
-		try (var entries = Files.list(HOME_DIR)) {
-			return entries
-					.map(dir -> dir.resolve(".pm2"))
-					.filter(pm2Dir -> Files.exists(pm2Dir.resolve("pm2.pid")))
-					.findFirst()
-					.orElse(null);
-		} catch (IOException e) {
-			return null;
-		}
+		return homes;
 	}
 
 	/** Package-private for direct unit testing against a canned "pm2 jlist" payload. */
