@@ -258,9 +258,28 @@ Normal case (a new feature adds columns/tables but doesn't change existing ones 
 common case, and the only one `ddl-auto=update` supports without manual SQL, see "Resetting
 a deployment" below for the other case):
 
-- **central-server**: `docker compose -f deploy/docker-compose.yml --env-file deploy/.env
-  pull && docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`. New
-  columns/tables get created automatically on boot. If a new table is an `@ElementCollection`
+- **central-server**: pull the new image, then recreate the container - which command
+  depends on how it was installed:
+  - Installed via `install-central.sh` (files live in `/opt/sentinel`, no `deploy/`
+    subfolder):
+    ```bash
+    cd /opt/sentinel
+    docker compose --env-file .env pull
+    docker compose --env-file .env up -d
+    ```
+  - Installed via `git clone` + `deploy/docker-compose.yml`:
+    ```bash
+    docker compose -f deploy/docker-compose.yml --env-file deploy/.env pull
+    docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
+    ```
+
+  The `pull` step matters: `up -d` only fetches an image if that tag isn't already cached
+  locally, so skipping it silently keeps whatever `central-server:latest` happened to be
+  cached from an earlier install/update, never picking up the newer one CI just built -
+  confirmed live, it looked like a successful update (no error anywhere) with new dashboard
+  features just never showing up.
+
+  New columns/tables get created automatically on boot. If a new table is an `@ElementCollection`
   hanging off `system_metrics`/`service_metrics`/`logs_raw`/`log_events` (the four
   hypertables), it must use a `NO_CONSTRAINT` join (see `SystemMetricEntity`) instead of a
   real foreign key - those tables already had their primary key dropped by
