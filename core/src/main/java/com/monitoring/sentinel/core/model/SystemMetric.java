@@ -16,6 +16,10 @@ public class SystemMetric {
 	private long ramTotalMb;
 	private List<DiskUsage> disks;
 	private NetworkUsage network;
+	private long topProcessRssMb;
+	private List<TopProcess> topProcesses;
+	private long heaviestFileSizeMb;
+	private List<HeaviestFile> heaviestFiles;
 
 	public SystemMetric() {
 	}
@@ -82,5 +86,37 @@ public class SystemMetric {
 
 	public void setNetwork(NetworkUsage network) {
 		this.network = network;
+	}
+
+	public long getTopProcessRssMb() {
+		return topProcessRssMb;
+	}
+
+	public void setTopProcessRssMb(long topProcessRssMb) {
+		this.topProcessRssMb = topProcessRssMb;
+	}
+
+	public List<TopProcess> getTopProcesses() {
+		return topProcesses;
+	}
+
+	public void setTopProcesses(List<TopProcess> topProcesses) {
+		this.topProcesses = topProcesses;
+	}
+
+	public long getHeaviestFileSizeMb() {
+		return heaviestFileSizeMb;
+	}
+
+	public void setHeaviestFileSizeMb(long heaviestFileSizeMb) {
+		this.heaviestFileSizeMb = heaviestFileSizeMb;
+	}
+
+	public List<HeaviestFile> getHeaviestFiles() {
+		return heaviestFiles;
+	}
+
+	public void setHeaviestFiles(List<HeaviestFile> heaviestFiles) {
+		this.heaviestFiles = heaviestFiles;
 	}
 }

@@ -1,6 +1,8 @@
 #ifndef SENTINEL_SYSTEM_STATS_H
 #define SENTINEL_SYSTEM_STATS_H
 
+#include "process_stats.h"
+
 typedef struct {
     double used_gb;
     double total_gb;
@@ -16,6 +18,8 @@ typedef struct {
     long tx_bytes;
     disk_usage_t disks[16];
     int disk_count;
+    /* Top processes by RSS, like `top` sorted by memory - processes[0] is the heaviest. */
+    top_processes_t top_processes;
 } system_stats_t;
 
 /* Reads /proc and /sys to fill out. Returns 0 on success. */

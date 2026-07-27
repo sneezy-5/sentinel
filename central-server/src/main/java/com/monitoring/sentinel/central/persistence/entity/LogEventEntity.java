@@ -27,6 +27,10 @@ public class LogEventEntity {
 	@Enumerated(EnumType.STRING)
 	private LogEventType eventType;
 
+	// Null for ERROR/WARNING/INFO - populated for API_CALL ("method path", e.g. "GET
+	// /api/stock"), see LogEvent.
+	private String detail;
+
 	private long count;
 
 	protected LogEventEntity() {
@@ -37,6 +41,7 @@ public class LogEventEntity {
 		entity.serviceId = event.getServiceId();
 		entity.timestamp = event.getTimestamp();
 		entity.eventType = event.getEventType();
+		entity.detail = event.getDetail();
 		entity.count = event.getCount();
 		return entity;
 	}
@@ -46,6 +51,7 @@ public class LogEventEntity {
 		event.setServiceId(serviceId);
 		event.setTimestamp(timestamp);
 		event.setEventType(eventType);
+		event.setDetail(detail);
 		event.setCount(count);
 		return event;
 	}
@@ -56,6 +62,10 @@ public class LogEventEntity {
 
 	public LogEventType getEventType() {
 		return eventType;
+	}
+
+	public String getDetail() {
+		return detail;
 	}
 
 	public long getCount() {

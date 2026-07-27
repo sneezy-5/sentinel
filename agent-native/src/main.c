@@ -27,7 +27,7 @@ static void write_atomic(const char *path, const char *content, int length) {
 int main(void) {
     mkdir("/run/sentinel", 0755);
 
-    char json_buffer[2048];
+    char json_buffer[4096];
     while (1) {
         system_stats_t stats;
         system_stats_collect(&stats);

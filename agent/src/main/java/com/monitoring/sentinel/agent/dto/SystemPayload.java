@@ -8,5 +8,9 @@ public record SystemPayload(
 		long ramUsedMb,
 		long ramTotalMb,
 		List<DiskUsagePayload> disk,
-		NetworkUsagePayload network) {
+		NetworkUsagePayload network,
+		long topProcessRssMb,
+		List<TopProcessPayload> topProcesses,
+		long heaviestFileSizeMb,
+		List<HeaviestFilePayload> heaviestFiles) {
 }

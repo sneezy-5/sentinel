@@ -27,13 +27,17 @@ import com.monitoring.sentinel.core.model.LogEvent;
 import com.monitoring.sentinel.core.model.NetworkUsage;
 import com.monitoring.sentinel.core.model.Service;
 import com.monitoring.sentinel.core.model.ServiceMetric;
+import com.monitoring.sentinel.core.model.HeaviestFile;
 import com.monitoring.sentinel.core.model.SystemMetric;
+import com.monitoring.sentinel.core.model.TopProcess;
 import com.monitoring.sentinel.core.validation.ServiceIdValidator;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @org.springframework.stereotype.Service
@@ -81,6 +85,18 @@ public class IngestionService {
 		systemMetric.setDisks(payload.system().disk().stream()
 				.map(d -> new DiskUsage(d.mount(), d.usedGb(), d.totalGb()))
 				.collect(Collectors.toList()));
+		systemMetric.setTopProcessRssMb(payload.system().topProcessRssMb());
+		if (payload.system().topProcesses() != null) {
+			systemMetric.setTopProcesses(payload.system().topProcesses().stream()
+					.map(p -> new TopProcess(p.pid(), p.name(), p.rssMb()))
+					.collect(Collectors.toList()));
+		}
+		systemMetric.setHeaviestFileSizeMb(payload.system().heaviestFileSizeMb());
+		if (payload.system().heaviestFiles() != null) {
+			systemMetric.setHeaviestFiles(payload.system().heaviestFiles().stream()
+					.map(f -> new HeaviestFile(f.path(), f.sizeMb()))
+					.collect(Collectors.toList()));
+		}
 		systemMetricRepository.save(SystemMetricEntity.fromModel(systemMetric));
 
 		for (ServicePayload servicePayload : payload.services()) {
@@ -137,6 +153,26 @@ public class IngestionService {
 			event.setTimestamp(Instant.now());
 			event.setEventType(LogEventType.ERROR);
 			event.setCount(errorCount);
+			logEventRepository.save(LogEventEntity.fromModel(event));
+		}
+
+		// Standard access-log format detection (architecture doc, section 7.2) - one API_CALL
+		// row per distinct "method path" seen in this batch, not per raw line (log_events is
+		// meant to stay tiny; ranking is done by summing these over time, see
+		// LogEventRepository.topEndpoints).
+		Instant now = Instant.now();
+		Map<String, Long> callsByEndpoint = payload.entries().stream()
+				.map(e -> NginxAccessLogParser.parse(e.message()))
+				.filter(Optional::isPresent)
+				.map(Optional::get)
+				.collect(Collectors.groupingBy(NginxAccessLogParser.Endpoint::label, Collectors.counting()));
+		for (Map.Entry<String, Long> call : callsByEndpoint.entrySet()) {
+			LogEvent event = new LogEvent();
+			event.setServiceId(payload.serviceId());
+			event.setTimestamp(now);
+			event.setEventType(LogEventType.API_CALL);
+			event.setDetail(call.getKey());
+			event.setCount(call.getValue());
 			logEventRepository.save(LogEventEntity.fromModel(event));
 		}
 	}

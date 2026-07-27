@@ -9,8 +9,13 @@ public record SystemStats(
 		long ramTotalMb,
 		List<Disk> disks,
 		long rxBytes,
-		long txBytes) {
+		long txBytes,
+		long topProcessRssMb,
+		List<TopProcess> topProcesses) {
 
 	public record Disk(String mount, double usedGb, double totalGb) {
+	}
+
+	public record TopProcess(int pid, String name, long rssMb) {
 	}
 }

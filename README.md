@@ -184,6 +184,32 @@ If a monitored server can't reach github.com, `deploy/downloads/` is a self-host
 Visit `https://<your-domain>`, add a server from the dashboard, and run the install
 command it gives you on a second VPS to exercise the full push flow end-to-end.
 
+### Updating an existing deployment
+
+Normal case (a new feature adds columns/tables but doesn't change existing ones - the
+common case, and the only one `ddl-auto=update` supports without manual SQL, see "Resetting
+a deployment" below for the other case):
+
+- **central-server**: `docker compose -f deploy/docker-compose.yml --env-file deploy/.env
+  pull && docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`. New
+  columns/tables get created automatically on boot. If a new table is an `@ElementCollection`
+  hanging off `system_metrics`/`service_metrics`/`logs_raw`/`log_events` (the four
+  hypertables), it must use a `NO_CONSTRAINT` join (see `SystemMetricEntity`) instead of a
+  real foreign key - those tables already had their primary key dropped by
+  `init-hypertables.sql`, so Hibernate creating a *new* table with a real FK against them
+  fails outright on an already-converted database. Easy to get wrong when adding the next
+  one: if central-server fails to start after an update with a Postgres error mentioning a
+  foreign key constraint, this is almost certainly why.
+- **agent**: re-run the same `install.sh` command used for the original install (same
+  token/central URL, or whatever placeholder values - see below). It stops the services,
+  overwrites the two binaries with the latest release, and restarts - the existing
+  `monitoring-agent.yml` is never touched (`install.sh` only writes one if none exists
+  yet), and any config field the update introduced that isn't in that file falls back to
+  `AgentConfig`'s own default (verified in `ConfigLoaderTest` - SnakeYAML only sets fields
+  actually present in the YAML, it doesn't null out the rest). `--token`/`--central` still
+  need to be *passed* to satisfy the script's argument check even though they won't be used
+  for an update - the values in your already-installed config are fine to reuse.
+
 ### Resetting a deployment (wipe and start over)
 
 Since `ddl-auto` is `update`, not a real migration tool (see the "Getting started" note

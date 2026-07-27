@@ -37,6 +37,24 @@
 			</dl>
 		</div>
 
+		<div class="card" th:if="${not #lists.isEmpty(topEndpoints)}">
+			<div class="card-header">Top endpoints (by calls)</div>
+			<table>
+				<thead>
+					<tr>
+						<th>Request</th>
+						<th>Calls</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr th:each="endpoint : ${topEndpoints}">
+						<td class="mono" th:text="${endpoint.detail}">METHOD /path</td>
+						<td class="mono" th:text="${endpoint.totalCount}">0</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
 		<div class="card">
 			<div class="card-header">Recent logs</div>
 			<div class="log-scroll" th:if="${not #lists.isEmpty(logs)}">

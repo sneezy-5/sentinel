@@ -65,6 +65,35 @@
 			</div>
 		</div>
 
+		<div class="card" id="top-processes-card">
+			<div class="card-header">Top processes (by memory)</div>
+			<table id="top-processes-table" hidden>
+				<thead>
+					<tr>
+						<th>PID</th>
+						<th>Name</th>
+						<th>RSS</th>
+					</tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+			<p class="empty-state" id="top-processes-empty">No process data yet.</p>
+		</div>
+
+		<div class="card" id="heaviest-files-card">
+			<div class="card-header">Heaviest files</div>
+			<table id="heaviest-files-table" hidden>
+				<thead>
+					<tr>
+						<th>Path</th>
+						<th>Size</th>
+					</tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+			<p class="empty-state" id="heaviest-files-empty">No file scan data yet.</p>
+		</div>
+
 		<div class="card">
 			<div class="card-header">Services</div>
 			<table th:if="${not #lists.isEmpty(services)}">

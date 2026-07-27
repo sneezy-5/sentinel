@@ -3,9 +3,11 @@ package com.monitoring.sentinel.central.web;
 import com.monitoring.sentinel.central.persistence.entity.ServiceEntity;
 import com.monitoring.sentinel.central.persistence.entity.ServiceMetricEntity;
 import com.monitoring.sentinel.central.persistence.repository.LogEntryRepository;
+import com.monitoring.sentinel.central.persistence.repository.LogEventRepository;
 import com.monitoring.sentinel.central.persistence.repository.ServerRepository;
 import com.monitoring.sentinel.central.persistence.repository.ServiceMetricRepository;
 import com.monitoring.sentinel.central.persistence.repository.ServiceRepository;
+import com.monitoring.sentinel.core.enums.LogEventType;
 import com.monitoring.sentinel.core.enums.LogLevel;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Controller;
@@ -34,20 +36,25 @@ public class DashboardController {
 	private static final DateTimeFormatter LOG_TIMESTAMP_FORMAT =
 			DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
 
+	private static final int TOP_ENDPOINTS_LIMIT = 10;
+
 	private final ServerRepository serverRepository;
 	private final ServiceRepository serviceRepository;
 	private final ServiceMetricRepository serviceMetricRepository;
 	private final LogEntryRepository logEntryRepository;
+	private final LogEventRepository logEventRepository;
 
 	public DashboardController(
 			ServerRepository serverRepository,
 			ServiceRepository serviceRepository,
 			ServiceMetricRepository serviceMetricRepository,
-			LogEntryRepository logEntryRepository) {
+			LogEntryRepository logEntryRepository,
+			LogEventRepository logEventRepository) {
 		this.serverRepository = serverRepository;
 		this.serviceRepository = serviceRepository;
 		this.serviceMetricRepository = serviceMetricRepository;
 		this.logEntryRepository = logEntryRepository;
+		this.logEventRepository = logEventRepository;
 	}
 
 	@GetMapping("/")
@@ -90,6 +97,13 @@ public class DashboardController {
 						LOG_TIMESTAMP_FORMAT.format(entry.getTimestamp()), entry.getLevel(), entry.getMessage()))
 				.toList();
 		model.addAttribute("logs", logs);
+
+		// Populated for any service whose raw logs happen to match a standard access-log
+		// format (see NginxAccessLogParser) - not gated to service.type == NGINX, since a
+		// dockerized nginx (or any other service fronting HTTP traffic in that format) gets
+		// this too.
+		model.addAttribute("topEndpoints", logEventRepository.topEndpoints(
+				serviceId, LogEventType.API_CALL, PageRequest.of(0, TOP_ENDPOINTS_LIMIT)));
 		return "service-detail";
 	}
 

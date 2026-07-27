@@ -204,6 +204,45 @@
 		hitArea.addEventListener("pointerleave", hide);
 	}
 
+	// Both tables live outside #server-metrics (not part of the tile/chart card), so they're
+	// looked up from the document rather than the `detail` root the other renderers get.
+	function renderRows(tableId, emptyId, items, cellsFor) {
+		const table = document.getElementById(tableId);
+		const empty = document.getElementById(emptyId);
+		if (!table || !empty) {
+			return;
+		}
+		if (!items || items.length === 0) {
+			table.hidden = true;
+			empty.hidden = false;
+			return;
+		}
+		table.hidden = false;
+		empty.hidden = true;
+		const tbody = table.querySelector("tbody");
+		tbody.textContent = "";
+		items.forEach((item) => {
+			const row = document.createElement("tr");
+			cellsFor(item).forEach((text) => {
+				const cell = document.createElement("td");
+				cell.className = "mono";
+				cell.textContent = text;
+				row.appendChild(cell);
+			});
+			tbody.appendChild(row);
+		});
+	}
+
+	function renderTopProcesses(latest) {
+		renderRows("top-processes-table", "top-processes-empty", latest.topProcesses,
+			(p) => [p.pid, p.name, p.rssMb + " MB"]);
+	}
+
+	function renderHeaviestFiles(latest) {
+		renderRows("heaviest-files-table", "heaviest-files-empty", latest.heaviestFiles,
+			(f) => [f.path, f.sizeMb + " MB"]);
+	}
+
 	async function refreshMetrics(detail, serverId) {
 		let metrics;
 		try {
@@ -227,6 +266,8 @@
 		detail.querySelector(".chart-empty").hidden = true;
 		renderStatTiles(detail, metrics);
 		renderChart(detail, metrics);
+		renderTopProcesses(metrics[metrics.length - 1]);
+		renderHeaviestFiles(metrics[metrics.length - 1]);
 	}
 
 	// Status/last-push/services count are server-rendered on load - re-fetched from the

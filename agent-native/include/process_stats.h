@@ -14,4 +14,18 @@ typedef struct {
  * is no longer readable. */
 int process_stats_collect(int pid, process_stats_t *out);
 
+#define PROCESS_STATS_TOP_N 5
+
+typedef struct {
+    process_stats_t processes[PROCESS_STATS_TOP_N];
+    int count;
+} top_processes_t;
+
+/* Scans every PID under /proc, keeping the top PROCESS_STATS_TOP_N by RSS (VmRSS) - a
+ * lightweight approximation of `top` sorted by memory. Individual processes that vanish
+ * mid-scan or aren't readable (permissions) are skipped rather than failing the whole
+ * scan - out->count just ends up lower. Returns 0 on success, -1 only if /proc itself
+ * can't be opened. */
+int process_stats_top_by_rss(top_processes_t *out);
+
 #endif

@@ -113,20 +113,32 @@ int system_stats_collect(system_stats_t *out) {
     read_network(&out->rx_bytes, &out->tx_bytes);
     read_root_disk(&out->disks[0]);
     out->disk_count = 1;
+    process_stats_top_by_rss(&out->top_processes);
     return 0;
 }
 
 int system_stats_to_json(const system_stats_t *stats, char *buffer, int buffer_size) {
+    long top_rss_mb = stats->top_processes.count > 0 ? stats->top_processes.processes[0].rss_kb / 1024 : 0;
+
     int offset = snprintf(buffer, (size_t) buffer_size,
         "{\"cpuPercent\":%.2f,\"cpuCores\":%d,\"ramUsedMb\":%ld,\"ramTotalMb\":%ld,"
-        "\"rxBytes\":%ld,\"txBytes\":%ld,\"disks\":[",
+        "\"rxBytes\":%ld,\"txBytes\":%ld,\"topProcessRssMb\":%ld,\"disks\":[",
         stats->cpu_percent, stats->cpu_cores, stats->ram_used_mb, stats->ram_total_mb,
-        stats->rx_bytes, stats->tx_bytes);
+        stats->rx_bytes, stats->tx_bytes, top_rss_mb);
 
     for (int i = 0; i < stats->disk_count && offset < buffer_size; i++) {
         offset += snprintf(buffer + offset, (size_t) (buffer_size - offset),
             "%s{\"mount\":\"%s\",\"usedGb\":%.2f,\"totalGb\":%.2f}",
             i > 0 ? "," : "", stats->disks[i].mount, stats->disks[i].used_gb, stats->disks[i].total_gb);
+    }
+    if (offset < buffer_size) {
+        offset += snprintf(buffer + offset, (size_t) (buffer_size - offset), "],\"topProcesses\":[");
+    }
+    for (int i = 0; i < stats->top_processes.count && offset < buffer_size; i++) {
+        const process_stats_t *p = &stats->top_processes.processes[i];
+        offset += snprintf(buffer + offset, (size_t) (buffer_size - offset),
+            "%s{\"pid\":%d,\"name\":\"%s\",\"rssMb\":%ld}",
+            i > 0 ? "," : "", p->pid, p->name, p->rss_kb / 1024);
     }
     if (offset < buffer_size) {
         offset += snprintf(buffer + offset, (size_t) (buffer_size - offset), "]}");

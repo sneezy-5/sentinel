@@ -25,10 +25,15 @@ import java.util.UUID;
 @Controller
 public class AlertRuleController {
 
-	// Matches what's actually collected (server: cpuPercent/ramUsedMb, service:
-	// cpuPercent/memMb/diskMb - see the ingestion DTOs) - AlertEvaluationService has no
-	// separate registry of valid names to source this from, so it's listed here directly.
-	private static final List<String> METRIC_NAMES = List.of("cpuPercent", "ramUsedMb", "memMb", "diskMb");
+	// Matches what's actually collected (server: cpuPercent/ramUsedMb/topProcessRssMb/
+	// heaviestFileSizeMb, service: cpuPercent/memMb/diskMb - see the ingestion DTOs) -
+	// AlertEvaluationService has no separate registry of valid names to source this from, so
+	// it's listed here directly. Note: this is one flat list for both server- and
+	// service-level rules, so nothing stops picking e.g. topProcessRssMb (server-only) on a
+	// rule scoped to a service - a pre-existing gap (diskMb/server has the same issue) that
+	// just fails that one rule's evaluation rather than silently doing the wrong thing.
+	private static final List<String> METRIC_NAMES =
+			List.of("cpuPercent", "ramUsedMb", "topProcessRssMb", "heaviestFileSizeMb", "memMb", "diskMb");
 
 	private final AlertRuleRepository alertRuleRepository;
 	private final ServerRepository serverRepository;

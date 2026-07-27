@@ -8,7 +8,8 @@ public enum ServiceType {
 	DOCKER("docker"),
 	PM2("pm2"),
 	K8S("k8s"),
-	PROCESS("process");
+	PROCESS("process"),
+	NGINX("nginx");
 
 	private final String prefix;
 

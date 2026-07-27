@@ -22,6 +22,11 @@
 -- SystemMetricEntity.disks) has a foreign key pointing at this primary key, so a plain
 -- DROP CONSTRAINT fails. CASCADE also drops that FK - harmless, Hibernate manages the
 -- disks/parent relationship at the ORM level, not through the DB constraint.
+-- (system_metric_top_processes/system_metric_heaviest_files, added later, were deliberately
+-- given NO_CONSTRAINT joins instead of a real FK - see SystemMetricEntity - specifically so
+-- an *already*-hypertable-converted deployment updating to pick up those tables doesn't hit
+-- this same problem one level removed: Hibernate can't create a new FK against a column
+-- that already lost its unique constraint here.)
 
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 

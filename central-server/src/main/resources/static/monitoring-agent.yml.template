@@ -16,3 +16,16 @@ token: "__TOKEN__"
 
 # includeServices:
 #   - "djeli-api"
+
+# Largest files under this path get reported/alertable as heaviestFileSizeMb - a full-disk
+# scan every push cycle would be too expensive, so this only looks under one directory and
+# only rescans every heaviestFileScanIntervalSeconds. Set heaviestFileScanPath to "" to
+# disable entirely.
+# heaviestFileScanPath: "/var/log"
+# heaviestFileScanIntervalSeconds: 3600
+
+# Only relevant if nginx is installed directly on this host (not in Docker - a dockerized
+# nginx is already covered by the normal container log collection). Set either to "" to
+# disable.
+# nginxAccessLogPath: "/var/log/nginx/access.log"
+# nginxErrorLogPath: "/var/log/nginx/error.log"

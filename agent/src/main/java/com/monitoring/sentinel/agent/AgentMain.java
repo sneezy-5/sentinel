@@ -1,5 +1,7 @@
 package com.monitoring.sentinel.agent;
 
+import com.monitoring.sentinel.agent.collector.HeaviestFile;
+import com.monitoring.sentinel.agent.collector.HeaviestFileScanner;
 import com.monitoring.sentinel.agent.collector.NativeStatsClient;
 import com.monitoring.sentinel.agent.collector.SystemStats;
 import com.monitoring.sentinel.agent.config.AgentConfig;
@@ -8,16 +10,19 @@ import com.monitoring.sentinel.agent.discovery.DiscoveredService;
 import com.monitoring.sentinel.agent.discovery.DockerAdapter;
 import com.monitoring.sentinel.agent.discovery.KubernetesAdapter;
 import com.monitoring.sentinel.agent.discovery.LogSource;
+import com.monitoring.sentinel.agent.discovery.NginxAdapter;
 import com.monitoring.sentinel.agent.discovery.Pm2Adapter;
 import com.monitoring.sentinel.agent.discovery.ProcessAdapter;
 import com.monitoring.sentinel.agent.discovery.ServiceAdapter;
 import com.monitoring.sentinel.agent.dto.DiskUsagePayload;
+import com.monitoring.sentinel.agent.dto.HeaviestFilePayload;
 import com.monitoring.sentinel.agent.dto.LogBatchPayload;
 import com.monitoring.sentinel.agent.dto.LogEntryPayload;
 import com.monitoring.sentinel.agent.dto.MetricsPayload;
 import com.monitoring.sentinel.agent.dto.NetworkUsagePayload;
 import com.monitoring.sentinel.agent.dto.ServicePayload;
 import com.monitoring.sentinel.agent.dto.SystemPayload;
+import com.monitoring.sentinel.agent.dto.TopProcessPayload;
 import com.monitoring.sentinel.agent.network.LocalBuffer;
 import com.monitoring.sentinel.agent.network.PushClient;
 
@@ -49,9 +54,12 @@ public final class AgentMain {
 		NativeStatsClient nativeStatsClient = new NativeStatsClient(Path.of("/run/sentinel/system_stats.json"));
 		PushClient pushClient = new PushClient(config.getCentralUrl(), config.getToken());
 		LocalBuffer buffer = new LocalBuffer(Path.of("/var/lib/sentinel/buffer.jsonl"), BUFFER_MAX_AGE);
+		HeaviestFileScanner heaviestFileScanner = new HeaviestFileScanner(
+				config.getHeaviestFileScanPath(), Duration.ofSeconds(config.getHeaviestFileScanIntervalSeconds()));
 
 		List<ServiceAdapter> adapters = List.of(
-				new DockerAdapter(), new Pm2Adapter(), new KubernetesAdapter(), new ProcessAdapter());
+				new DockerAdapter(), new Pm2Adapter(), new KubernetesAdapter(), new ProcessAdapter(),
+				NginxAdapter.fromConfig(config.getNginxAccessLogPath(), config.getNginxErrorLogPath()));
 
 		// Per-service "last seen log timestamp", so each cycle only fetches new lines
 		// (architecture doc, section 6.2: "curseur/offset local par source de log"). In
@@ -63,14 +71,15 @@ public final class AgentMain {
 				+ ", pushIntervalSeconds=" + config.getPushIntervalSeconds());
 
 		while (true) {
-			runOnce(nativeStatsClient, adapters, pushClient, buffer, logCursors);
+			runOnce(nativeStatsClient, adapters, pushClient, buffer, logCursors, heaviestFileScanner);
 			sleep(Duration.ofSeconds(config.getPushIntervalSeconds()));
 		}
 	}
 
 	private static void runOnce(
 			NativeStatsClient nativeStatsClient, List<ServiceAdapter> adapters,
-			PushClient pushClient, LocalBuffer buffer, Map<String, Instant> logCursors) {
+			PushClient pushClient, LocalBuffer buffer, Map<String, Instant> logCursors,
+			HeaviestFileScanner heaviestFileScanner) {
 		try {
 			SystemStats systemStats = nativeStatsClient.readLatest();
 
@@ -90,7 +99,8 @@ public final class AgentMain {
 				}
 			}
 
-			MetricsPayload payload = toPayload(systemStats, services);
+			List<HeaviestFile> heaviestFiles = heaviestFileScanner.scanIfDue();
+			MetricsPayload payload = toPayload(systemStats, services, heaviestFiles);
 			if (pushClient.pushMetrics(payload)) {
 				System.out.println("Pushed metrics (" + services.size() + " services) at " + payload.timestamp());
 			} else {
@@ -129,7 +139,22 @@ public final class AgentMain {
 		}
 	}
 
-	private static MetricsPayload toPayload(SystemStats stats, List<DiscoveredService> services) {
+	private static MetricsPayload toPayload(
+			SystemStats stats, List<DiscoveredService> services, List<HeaviestFile> heaviestFiles) {
+		// Null rather than an empty list if the running C binary predates this field (rolling
+		// update where the two binaries are momentarily out of sync) - treat that the same as
+		// "found nothing" instead of throwing.
+		List<TopProcessPayload> topProcesses = stats.topProcesses() == null
+				? List.of()
+				: stats.topProcesses().stream()
+						.map(p -> new TopProcessPayload(p.pid(), p.name(), p.rssMb()))
+						.collect(Collectors.toList());
+
+		List<HeaviestFilePayload> heaviestFilePayloads = heaviestFiles.stream()
+				.map(f -> new HeaviestFilePayload(f.path(), f.sizeMb()))
+				.collect(Collectors.toList());
+		long heaviestFileSizeMb = heaviestFiles.isEmpty() ? 0 : heaviestFiles.get(0).sizeMb();
+
 		SystemPayload systemPayload = new SystemPayload(
 				stats.cpuPercent(),
 				stats.cpuCores(),
@@ -138,7 +163,11 @@ public final class AgentMain {
 				stats.disks().stream()
 						.map(d -> new DiskUsagePayload(d.mount(), d.usedGb(), d.totalGb()))
 						.collect(Collectors.toList()),
-				new NetworkUsagePayload(stats.rxBytes(), stats.txBytes()));
+				new NetworkUsagePayload(stats.rxBytes(), stats.txBytes()),
+				stats.topProcessRssMb(),
+				topProcesses,
+				heaviestFileSizeMb,
+				heaviestFilePayloads);
 
 		List<ServicePayload> servicePayloads = services.stream()
 				.map(s -> new ServicePayload(s.id(), s.name(), s.type(), s.status(), s.cpuPercent(), s.memMb(), s.diskMb(), s.metadata()))

@@ -67,6 +67,8 @@ public class AlertEvaluationService {
 		return switch (targetMetric) {
 			case "cpuPercent" -> metric.getCpuPercent();
 			case "ramUsedMb" -> metric.getRamUsedMb();
+			case "topProcessRssMb" -> metric.getTopProcessRssMb();
+			case "heaviestFileSizeMb" -> metric.getHeaviestFileSizeMb();
 			default -> throw new IllegalArgumentException("Unknown system metric: " + targetMetric);
 		};
 	}
