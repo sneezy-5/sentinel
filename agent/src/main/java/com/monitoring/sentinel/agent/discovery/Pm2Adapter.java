@@ -5,10 +5,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -35,8 +40,17 @@ import java.util.regex.Pattern;
  * processes. Stopping at the first pm2.pid found - which used to be root's own, checked
  * first - meant a single stray `pm2 ls` run as root silently hid every real process running
  * under an actual user's account from then on, with nothing about it looking like a failure.
+ *
+ * Also a LogSource: PM2 already centralizes each process' stdout/stderr under
+ * <PM2_HOME>/logs (architecture doc, section 3.2) - "pm2 jlist" conveniently already reports
+ * the exact paths per process (pm_out_log_path/pm_err_log_path), cluster-mode instance
+ * numbering and all, so there's no need to reconstruct them from the process name. Tailed by
+ * byte offset per file (own instance state), not the timestamp `since` cursor AgentMain
+ * otherwise uses - same reasoning as NginxAdapter: a raw file has no "give me everything
+ * since time X" query, and PM2's own log files aren't reliably timestamped in the first
+ * place (only if the app itself logs one, or PM2 was started with --time).
  */
-public class Pm2Adapter implements ServiceAdapter {
+public class Pm2Adapter implements ServiceAdapter, LogSource {
 
 	private static final Path HOME_DIR = Path.of("/home");
 	private static final Pattern INVALID_NAME_CHARS = Pattern.compile("[^a-z0-9_-]");
@@ -44,6 +58,7 @@ public class Pm2Adapter implements ServiceAdapter {
 
 	private final ObjectMapper objectMapper = new ObjectMapper();
 	private boolean loggedUnavailable = false;
+	private final Map<Path, Long> logFileOffsets = new HashMap<>();
 
 	// isAvailable() only checks for *some* .pm2 directory (cheap, and logs at most once per
 	// agent run when it finds nothing - most servers genuinely have no PM2 at all and
@@ -153,9 +168,106 @@ public class Pm2Adapter implements ServiceAdapter {
 		metadata.put("pm2_id", process.path("pm_id").asText(""));
 		metadata.put("restarts", String.valueOf(env.path("restart_time").asInt(0)));
 
+		// "pm2 jlist" already reports the exact log paths per process (cluster-mode instance
+		// numbering and all) - encode both into the one string fetchLogs()/AgentMain expect,
+		// same "|"-joined trick KubernetesAdapter uses for its own multi-part nativeId. Empty
+		// on either side just means that stream doesn't have a log file (fetchLogs skips it).
+		String outLog = env.path("pm_out_log_path").asText("");
+		String errLog = env.path("pm_err_log_path").asText("");
+		metadata.put("log_native_id", outLog + "|" + errLog);
+
 		// No disk figure from PM2 itself - 0 rather than a fabricated number.
 		return new DiscoveredService(
 				"pm2:" + stableName, rawName, "pm2", online ? "running" : "stopped", cpuPercent, memMb, 0, metadata);
+	}
+
+	@Override
+	public List<LogLine> fetchLogs(String nativeId, Instant since) {
+		String[] parts = nativeId.split("\\|", 2);
+		String outLog = parts.length > 0 ? parts[0] : "";
+		String errLog = parts.length > 1 ? parts[1] : "";
+
+		List<LogLine> lines = new ArrayList<>();
+		if (!outLog.isBlank()) {
+			for (String raw : tailNewLines(Path.of(outLog))) {
+				lines.add(parseLine(raw));
+			}
+		}
+		if (!errLog.isBlank()) {
+			for (String raw : tailNewLines(Path.of(errLog))) {
+				lines.add(parseLine(raw));
+			}
+		}
+		return lines;
+	}
+
+	/** Reads whatever's been appended to path since the last call (byte offset tracked in
+	 * logFileOffsets, keyed by path since a single adapter instance tails many services'
+	 * files). First call for a given file skips straight to its current end rather than
+	 * dumping the existing backlog - these logs can already be sizeable by the time the
+	 * agent first sees them. Package-private for direct unit testing against temp files. */
+	List<String> tailNewLines(Path path) {
+		try {
+			long fileSize = Files.size(path);
+			Long previousOffset = logFileOffsets.get(path);
+			if (previousOffset == null) {
+				logFileOffsets.put(path, fileSize);
+				return List.of();
+			}
+			// Rotated/truncated since last time - start over rather than seek past EOF.
+			long offset = fileSize < previousOffset ? 0 : previousOffset;
+			if (offset == fileSize) {
+				return List.of();
+			}
+			try (RandomAccessFile file = new RandomAccessFile(path.toFile(), "r")) {
+				file.seek(offset);
+				List<String> lines = new ArrayList<>();
+				String line;
+				while ((line = file.readLine()) != null) {
+					// RandomAccessFile.readLine() decodes as ISO-8859-1 (its own documented
+					// behavior, not real charset detection) - re-decode as UTF-8.
+					lines.add(new String(line.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8));
+				}
+				logFileOffsets.put(path, file.getFilePointer());
+				return lines;
+			}
+		} catch (IOException | UncheckedIOException e) {
+			// Missing/unreadable file (deleted, permissions) - skip this cycle, not fatal to
+			// the other log stream or the rest of discovery.
+			System.err.println("Pm2Adapter: reading " + path + " failed: " + e.getMessage());
+			return List.of();
+		}
+	}
+
+	/** PM2's raw stdout/stderr passthrough has no guaranteed timestamp prefix (only present
+	 * if the app itself logs one, or PM2 was started with --time) - same defensive "try to
+	 * parse the first token as a timestamp, keep the whole line otherwise" pattern as
+	 * DockerAdapter. Package-private for direct unit testing. */
+	LogLine parseLine(String line) {
+		int spaceIndex = line.indexOf(' ');
+		if (spaceIndex < 0) {
+			return new LogLine(Instant.now(), classifyLevel(line), line);
+		}
+		String timestampPart = line.substring(0, spaceIndex);
+		String message = line.substring(spaceIndex + 1);
+		try {
+			return new LogLine(Instant.parse(timestampPart), classifyLevel(message), message);
+		} catch (DateTimeParseException e) {
+			return new LogLine(Instant.now(), classifyLevel(line), line);
+		}
+	}
+
+	/** No structured level in PM2's own log format - same keyword heuristic as
+	 * DockerAdapter/KubernetesAdapter (architecture doc, section 7.2). */
+	private String classifyLevel(String message) {
+		String lower = message.toLowerCase(Locale.ROOT);
+		if (lower.contains("error") || lower.contains("exception")) {
+			return "error";
+		}
+		if (lower.contains("warn")) {
+			return "warn";
+		}
+		return "info";
 	}
 
 	private String sanitizeName(String rawName) {

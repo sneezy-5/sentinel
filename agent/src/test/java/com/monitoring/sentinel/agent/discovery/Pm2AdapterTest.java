@@ -1,8 +1,13 @@
 package com.monitoring.sentinel.agent.discovery;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -47,7 +52,28 @@ class Pm2AdapterTest {
 		assertEquals(0.7, service.cpuPercent());
 		assertEquals(88, service.memMb());
 		assertEquals(0, service.diskMb());
-		assertEquals(Map.of("pm2_id", "0", "restarts", "0"), service.metadata());
+		assertEquals(Map.of("pm2_id", "0", "restarts", "0", "log_native_id", "|"), service.metadata());
+	}
+
+	@Test
+	void extractsLogPathsFromPm2EnvIntoLogNativeId() throws IOException {
+		String withLogPaths = """
+				{
+				  "pid": 1,
+				  "name": "whatsapp-worker",
+				  "pm2_env": {
+				    "status": "online", "restart_time": 0,
+				    "pm_out_log_path": "/home/sneezy/.pm2/logs/whatsapp-worker-out-1.log",
+				    "pm_err_log_path": "/home/sneezy/.pm2/logs/whatsapp-worker-error-1.log"
+				  },
+				  "pm_id": 1,
+				  "monit": { "memory": 0, "cpu": 0 }
+				}""";
+
+		List<DiscoveredService> services = adapter.parseJlist("[" + withLogPaths + "]");
+
+		assertEquals("/home/sneezy/.pm2/logs/whatsapp-worker-out-1.log|/home/sneezy/.pm2/logs/whatsapp-worker-error-1.log",
+				services.get(0).metadata().get("log_native_id"));
 	}
 
 	@Test
@@ -96,5 +122,78 @@ class Pm2AdapterTest {
 	@Test
 	void emptyListProducesNoServices() throws IOException {
 		assertTrue(adapter.parseJlist("[]").isEmpty());
+	}
+
+	@Test
+	void parseLineClassifiesErrorKeyword() {
+		LogSource.LogLine result = adapter.parseLine("Error: connection refused");
+
+		assertEquals("error", result.level());
+		assertEquals("Error: connection refused", result.message());
+	}
+
+	@Test
+	void parseLineClassifiesWarnKeyword() {
+		assertEquals("warn", adapter.parseLine("Warning: retrying").level());
+	}
+
+	@Test
+	void parseLineWithNoTimestampDefaultsToInfo() {
+		LogSource.LogLine result = adapter.parseLine("server listening on port 3000");
+
+		assertEquals("info", result.level());
+		assertEquals("server listening on port 3000", result.message());
+	}
+
+	@Test
+	void parseLineWithAnIsoTimestampPrefixExtractsIt() {
+		LogSource.LogLine result = adapter.parseLine("2026-07-27T14:00:00Z worker started");
+
+		assertEquals(Instant.parse("2026-07-27T14:00:00Z"), result.timestamp());
+		assertEquals("worker started", result.message());
+	}
+
+	@Test
+	void firstTailCallSkipsToEndOfFileWithoutReturningLines(@TempDir Path tempDir) throws IOException {
+		Path file = tempDir.resolve("app-out.log");
+		Files.writeString(file, "old line 1\nold line 2\n", StandardCharsets.UTF_8);
+
+		List<String> lines = adapter.tailNewLines(file);
+
+		assertTrue(lines.isEmpty());
+	}
+
+	@Test
+	void subsequentTailCallReturnsOnlyNewlyAppendedLines(@TempDir Path tempDir) throws IOException {
+		Path file = tempDir.resolve("app-out.log");
+		Files.writeString(file, "line 1\n", StandardCharsets.UTF_8);
+		adapter.tailNewLines(file);
+
+		Files.writeString(file, "line 2\nline 3\n", StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.APPEND);
+
+		assertEquals(List.of("line 2", "line 3"), adapter.tailNewLines(file));
+	}
+
+	@Test
+	void fetchLogsCombinesOutAndErrorStreams(@TempDir Path tempDir) throws IOException {
+		Path outLog = tempDir.resolve("app-out.log");
+		Path errLog = tempDir.resolve("app-error.log");
+		Files.createFile(outLog);
+		Files.createFile(errLog);
+		adapter.fetchLogs(outLog + "|" + errLog, null); // first call: skips existing (empty) backlog
+
+		Files.writeString(outLog, "listening on 3000\n", StandardCharsets.UTF_8);
+		Files.writeString(errLog, "Error: crashed\n", StandardCharsets.UTF_8);
+
+		List<LogSource.LogLine> lines = adapter.fetchLogs(outLog + "|" + errLog, null);
+
+		assertEquals(2, lines.size());
+		assertEquals("info", lines.get(0).level());
+		assertEquals("error", lines.get(1).level());
+	}
+
+	@Test
+	void fetchLogsSkipsBlankPaths() {
+		assertTrue(adapter.fetchLogs("|", null).isEmpty());
 	}
 }
