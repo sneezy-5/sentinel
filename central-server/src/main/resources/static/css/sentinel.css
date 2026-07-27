@@ -284,6 +284,15 @@ tbody tr:hover td {
 	word-break: break-word;
 }
 
+/* File paths (heaviest files) and request lines (top endpoints) can be far longer than a
+   process name or a metric value - without this the default th/td "white-space: nowrap"
+   pushes every column after the first one off-screen instead of wrapping. */
+#heaviest-files-table td:first-child,
+#top-endpoints-table td:first-child {
+	white-space: normal;
+	word-break: break-all;
+}
+
 /* Up to 100 rows (DashboardController's serviceDetail query) would otherwise stretch the
    page indefinitely - contain them in one scrollable panel with the header pinned instead. */
 .log-scroll {

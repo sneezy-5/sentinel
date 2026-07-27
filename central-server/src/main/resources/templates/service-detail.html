@@ -39,7 +39,7 @@
 
 		<div class="card" th:if="${not #lists.isEmpty(topEndpoints)}">
 			<div class="card-header">Top endpoints (by calls)</div>
-			<table>
+			<table id="top-endpoints-table">
 				<thead>
 					<tr>
 						<th>Request</th>
