@@ -99,14 +99,24 @@ echo "==> Waiting for central-server to create its schema..."
 # Poll for the actual signal (does system_metrics exist yet) instead of guessing a delay.
 SCHEMA_READY=false
 for _ in $(seq 1 30); do
+  # `< /dev/null`: this whole script's own stdin is the curl pipe still streaming the rest
+  # of the script's source - `docker compose exec` (even with -T, which only skips
+  # allocating a tty, not stdin forwarding) inherits and relays stdin to the container by
+  # default, so without this it can consume bytes meant for bash itself and truncate the
+  # script's execution partway through with no error, unpredictably depending on timing.
   if docker compose --env-file .env exec -T timescaledb \
-      psql -U sentinel -d sentinel -tAc "SELECT to_regclass('public.system_metrics') IS NOT NULL" 2>/dev/null \
+      psql -U sentinel -d sentinel -tAc "SELECT to_regclass('public.system_metrics') IS NOT NULL" \
+      < /dev/null 2>/dev/null \
       | grep -q "^t$"; then
     SCHEMA_READY=true
     break
   fi
+  # Otherwise this loop is completely silent for up to 60s, which reads as "hung" rather
+  # than "still working" - printf without a newline keeps it on the same "Waiting..." line.
+  printf '.'
   sleep 2
 done
+echo
 
 if [[ "$SCHEMA_READY" != true ]]; then
   echo "central-server hasn't created its schema after 60s - check its logs for a startup" >&2

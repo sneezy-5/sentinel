@@ -119,24 +119,73 @@ curl -sSL https://raw.githubusercontent.com/sneezy-5/sentinel/main/deploy/instal
   | sudo bash -s -- --domain=monitor.example.com --db-password=<a-real-password>
 ```
 
-Add `--no-caddy` if this host already runs nginx/another reverse proxy on 80/443 (see
-`deploy/nginx-central-server.conf.example`, downloaded alongside the rest). The script
-prints a generated admin password once at the end — save it immediately, change it from
-the Settings page after logging in.
+If this host already has a DNS-resolvable domain and its own reverse proxy on 80/443
+(nginx, another Caddy, etc.), add `--no-caddy` and skip to
+["Already have your own reverse proxy"](#already-have-your-own-reverse-proxy) below for the
+rest of the setup - the command above assumes Caddy is free to take 80/443 itself.
 
-**Run end-to-end on a real VPS** - surfaced one real bug, since fixed: the script used to
-wait a fixed 15s before converting the tables into hypertables, which isn't always enough
-time for Hibernate to finish creating them (`ddl-auto=update` on a slower box can take
-longer) - the hypertable conversion failed with "relation ... does not exist" on every
-statement. It now polls for `system_metrics` to actually exist (up to 60s) instead of
-guessing a delay. If it somehow still times out on a very slow box, re-run just that step
-once `docker compose --env-file .env logs central-server` shows "Started
-CentralServerApplication":
+The script prints a generated admin password once at the end — save it immediately, change
+it from the Settings page after logging in. **If you never see that final message at all
+(the script just seems to stop partway through, no error)**, you hit one of two bugs found
+by actually running this against a real VPS while writing it, both since fixed:
+
+- A fixed 15s wait before converting the tables into hypertables wasn't always enough time
+  for Hibernate to finish creating them (`ddl-auto=update` can take longer on a slower box) -
+  the conversion failed with "relation ... does not exist" on every statement. Replaced with
+  a poll loop (up to 60s, printing a `.` each check so it doesn't look hung) that waits for
+  `system_metrics` to actually exist first.
+- That poll loop's `docker compose exec` call didn't redirect its own stdin away from the
+  script's - since the whole script is `curl`'d straight into `bash`'s stdin, `exec` (even
+  with `-T`, which only skips allocating a tty, not stdin forwarding) was relaying bytes
+  meant for the rest of the *script itself* into the container instead, truncating execution
+  silently and unpredictably depending on timing. Fixed with `< /dev/null` on that call.
+
+If you're running an older copy of this script (cached, or fetched before this fix) and hit
+this, or it times out for an unrelated reason, the schema has usually already been created
+by the time the script stalls - just re-run the conversion directly instead of the whole
+script:
 
 ```bash
 cd /opt/sentinel
 docker compose --env-file .env exec -T timescaledb psql -U sentinel -d sentinel -f - < init-hypertables.sql
 ```
+
+### Already have your own reverse proxy
+
+If port 80 is already taken (a shared box running other sites, most commonly a
+host-installed nginx - `ss -tlnp | grep :80` shows what, `docker ps -a --filter
+publish=80` if it's a container instead), starting `caddy` will fail outright with
+"address already in use" and abort the rest of the script (`set -euo pipefail`) before it
+ever gets to the schema-wait/hypertable-conversion steps. Use `--no-caddy` from the start
+to skip that entirely:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/sneezy-5/sentinel/main/deploy/install-central.sh \
+  | sudo bash -s -- --domain=monitor.example.com --db-password=<a-real-password> --no-caddy
+```
+
+central-server ends up listening on `127.0.0.1:8090` only (not exposed publicly) - your own
+reverse proxy is what actually terminates TLS and gets requests to it.
+`nginx-central-server.conf.example` (downloaded into `/opt/sentinel` alongside everything
+else) is a starting point for nginx specifically:
+
+```bash
+cd /opt/sentinel
+# adapt SENTINEL_DOMAIN in the example to your real domain first
+cp nginx-central-server.conf.example /etc/nginx/sites-available/monitor.example.com
+ln -s /etc/nginx/sites-available/monitor.example.com /etc/nginx/sites-enabled/
+# get a cert however you normally do on this box, e.g.:
+certbot --nginx -d monitor.example.com
+nginx -t && systemctl reload nginx
+```
+
+The DNS A record for the domain needs to already resolve to this host before requesting a
+cert - same requirement as the Caddy path, just handled by whatever ACME client this
+already-existing nginx setup uses instead of Caddy's automatic one. Confirm central-server
+itself is reachable before troubleshooting the proxy layer - no `/actuator` endpoint (not a
+dependency here), but `curl -I http://127.0.0.1:8090/` from the VPS itself should still get
+a real HTTP response (redirect to the login page), independent of nginx/DNS/certs being
+right yet.
 
 ### Alternative: clone first
 
